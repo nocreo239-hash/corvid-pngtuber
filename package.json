@@ -1,0 +1,47 @@
+{
+  "name": "corvid-pngtuber",
+  "productName": "Corvid PNGtuber",
+  "version": "1.0.0",
+  "description": "PNGtuber para Twitch: reacciona al micrófono, parpadea, cambia de expresión con atajos y se conecta a OBS.",
+  "main": "main.js",
+  "author": "allan_martian",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis portable",
+    "test:server": "node tools/test-server.js"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.allanmartian.corvid",
+    "productName": "Corvid PNGtuber",
+    "publish": null,
+    "files": [
+      "main.js",
+      "preload.js",
+      "server.js",
+      "avatar-export.js",
+      "renderer/**",
+      "assets/**"
+    ],
+    "win": {
+      "target": ["nsis", "portable"],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Corvid PNGtuber",
+      "artifactName": "Corvid-PNGtuber-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Corvid-PNGtuber-Portable-${version}.${ext}"
+    }
+  }
+}

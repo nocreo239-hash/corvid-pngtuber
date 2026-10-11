@@ -1,0 +1,28 @@
+/* El contenedor (.av-root) define posición y tamaño; aquí solo se anima su interior. */
+.av-root { overflow: visible; }
+.av-place, .av-motion, .av-hop { position: absolute; inset: 0; transform-origin: 50% 100%; }
+.av-back, .av-frames, .av-front, .av-acc-wrap { position: absolute; inset: 0; }
+/* El salto, el aplastamiento y el balanceo (av-hop) y la inercia de los accesorios los mueve avatar.js */
+.av-hop, .av-acc-wrap { will-change: transform; }
+.av-img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; object-position: 50% 100%;
+  user-select: none; -webkit-user-drag: none; pointer-events: none;
+  visibility: hidden;
+}
+.av-img.av-on { visibility: visible; }
+
+.av-breathe .av-motion { animation: av-breathe 3.4s ease-in-out infinite; }
+@keyframes av-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(0.994, 1.016); }
+}
+
+.av-shaking .av-img { animation: av-shake 90ms linear infinite; }
+@keyframes av-shake {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(var(--shake), calc(var(--shake) * -0.5)); }
+  50% { transform: translate(calc(var(--shake) * -1), 0); }
+  75% { transform: translate(calc(var(--shake) * 0.5), var(--shake)); }
+  100% { transform: translate(0, 0); }
+}

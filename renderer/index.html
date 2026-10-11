@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' file:; img-src 'self' file: data: blob:; style-src 'self' file: 'unsafe-inline'; script-src 'self' file:; media-src 'self' file: blob:">
+  <title>Corvid · PNGtuber</title>
+  <link rel="stylesheet" href="avatar.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" class="brand-mark" aria-hidden="true">
+        <path d="M21 4a12 12 0 1 0 7 21A10 10 0 0 1 21 4z" fill="currentColor"/>
+      </svg>
+      <div>
+        <div class="brand-name">Corvid</div>
+        <div class="brand-sub">PNGtuber</div>
+      </div>
+    </div>
+    <div class="top-status">
+      <span class="pill" id="pillMic"><i></i><span>Micrófono</span></span>
+      <span class="pill" id="pillObs"><i></i><span>OBS</span></span>
+    </div>
+    <div class="top-actions">
+      <button class="btn ghost" id="btnMute" title="Silenciar (atajo + M)">Silenciar</button>
+      <button class="btn primary" id="btnCapture" title="Modo captura (atajo + H)">Modo captura</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage-col">
+      <div class="stage" id="stage">
+        <div class="stage-inner" id="avatar"></div>
+        <div class="stage-badge" id="exprBadge"></div>
+        <div class="capture-hint" id="captureHint">Esc para salir del modo captura</div>
+      </div>
+
+      <div class="meter-card">
+        <div class="meter" id="meter" title="Nivel del micrófono">
+          <div class="meter-fill" id="meterFill"></div>
+          <div class="meter-mark talk" id="markTalk"><span>hablar</span></div>
+          <div class="meter-mark shout" id="markShout"><span>gritar</span></div>
+        </div>
+        <div class="meter-row">
+          <span class="state-label" id="stateLabel">Callado</span>
+          <span class="muted small" id="meterHint">Habla para ver cómo reacciona</span>
+        </div>
+        <div class="quickbar" id="quickbar"></div>
+      </div>
+    </section>
+
+    <aside class="panel">
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="expr">Expresiones</button>
+        <button class="tab" data-tab="acc">Accesorios</button>
+        <button class="tab" data-tab="mic">Micrófono</button>
+        <button class="tab" data-tab="anim">Animación</button>
+        <button class="tab" data-tab="obs">OBS</button>
+      </nav>
+
+      <div class="tab-page active" data-page="expr">
+        <p class="muted small intro">Arrastra tus imágenes a cada casilla o haz clic para elegirlas. Si falta una, se usa la más parecida.
+          Con <b>Importar carpeta</b> eliges una carpeta con una subcarpeta por expresión
+          (<code>quieto.png</code>, <code>hablando.png</code>, <code>parpadeo.png</code>, <code>parpadeo_hablando.png</code>, <code>grito.png</code>).</p>
+        <div id="exprList" class="expr-list"></div>
+        <div class="row gap">
+          <button class="btn" id="btnAddExpr">+ Nueva expresión</button>
+          <button class="btn" id="btnImportFolder">Importar carpeta</button>
+          <button class="btn" id="btnExport" title="Guarda expresiones, accesorios, teclas y ajustes en una carpeta (copia de seguridad o para otro PC)">Exportar avatar</button>
+          <button class="btn ghost" id="btnResetRaven">Restaurar cuervo de ejemplo</button>
+        </div>
+      </div>
+
+      <div class="tab-page" data-page="acc">
+        <p class="muted small intro">Sombreros, gafas, alas… se ponen encima (o detrás) del personaje en todas las expresiones.
+          Usa un PNG transparente <b>del mismo tamaño</b> que las imágenes del personaje, con el accesorio ya en su sitio.
+          Se ponen y quitan con su tecla, con los botones de abajo o desde Streamer.bot.</p>
+        <div id="accList" class="expr-list"></div>
+        <div class="row gap">
+          <button class="btn" id="btnAddAcc">+ Nuevo accesorio</button>
+        </div>
+      </div>
+
+      <div class="tab-page" data-page="mic">
+        <div class="field">
+          <label for="selDevice">Micrófono</label>
+          <select id="selDevice"></select>
+        </div>
+        <div id="micControls"></div>
+        <div class="card soft">
+          <div class="card-title">Calibrar ruido de fondo</div>
+          <p class="muted small">Quédate en silencio 3 segundos y ajusto el umbral para que el ruido no active la boca.</p>
+          <button class="btn" id="btnCalibrate">Calibrar</button>
+        </div>
+      </div>
+
+      <div class="tab-page" data-page="anim">
+        <div id="animControls"></div>
+      </div>
+
+      <div class="tab-page" data-page="obs">
+        <div class="card">
+          <div class="card-title">Fuente de navegador (recomendado)</div>
+          <p class="muted small">Fondo transparente, sin chroma, y funciona aunque minimices esta ventana.</p>
+          <div class="url-box">
+            <code id="obsUrl">…</code>
+            <button class="btn small" id="btnCopyUrl">Copiar</button>
+          </div>
+          <ol class="steps small">
+            <li>En OBS: <b>+</b> → <b>Navegador</b>.</li>
+            <li>Pega la URL y pon tamaño <b>600 × 600</b>.</li>
+            <li>Deja esta app abierta mientras transmites.</li>
+          </ol>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Streamer.bot</div>
+          <p class="muted small">Cambia de expresión o silencia el micro desde Streamer.bot (recompensas, comandos del chat, Stream Deck…).
+            Elige qué quieres hacer y copia la dirección.</p>
+          <div class="field">
+            <select id="selRemote"></select>
+          </div>
+          <div class="url-box">
+            <code id="remoteUrl">…</code>
+            <button class="btn small" id="btnCopyRemote">Copiar</button>
+          </div>
+          <ol class="steps small">
+            <li>En Streamer.bot crea una <b>Acción</b> y ponle un disparador (recompensa, comando…).</li>
+            <li>Añade la subacción <b>Core → Network → Fetch URL</b> y pega la dirección.</li>
+            <li>Deja esta app abierta. La dirección lleva tu clave: no la compartas en el directo.</li>
+          </ol>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Modo captura (alternativa)</div>
+          <p class="muted small">Oculta los controles y pone un fondo sólido para capturar la ventana con filtro de croma.</p>
+          <div class="field">
+            <label>Color de fondo</label>
+            <div class="row gap">
+              <input type="color" id="inpBg">
+              <button class="swatch" data-color="#00ff00" style="background:#00ff00" title="Verde"></button>
+              <button class="swatch" data-color="#0000ff" style="background:#0000ff" title="Azul"></button>
+              <button class="swatch" data-color="#ff00ff" style="background:#ff00ff" title="Magenta"></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Atajos globales</div>
+          <p class="muted small">Funcionan aunque estés en el juego. Haz clic en una tecla para cambiarla
+            (<kbd>Esc</kbd> cancela, <kbd>Supr</kbd> la quita). Las de cada expresión se cambian en la pestaña Expresiones.</p>
+          <div class="key-row"><span>Silenciar / activar micrófono</span><button class="key-btn" id="keyMute"></button></div>
+          <div class="key-row"><span>Entrar / salir del modo captura</span><button class="key-btn" id="keyCapture"></button></div>
+          <p class="muted small">Consejo: las teclas F13–F24 o las del teclado numérico casi ningún juego las usa.</p>
+          <p class="warn small" id="hotkeyWarn" hidden></p>
+        </div>
+
+        <button class="btn ghost" id="btnOpenImages">Abrir carpeta de imágenes</button>
+      </div>
+    </aside>
+  </main>
+
+  <div class="toast" id="toast"></div>
+  <input type="file" id="filePicker" accept=".png,.gif,.webp,.jpg,.jpeg,.svg" hidden>
+  <input type="file" id="folderPicker" webkitdirectory hidden>
+
+  <script src="avatar.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

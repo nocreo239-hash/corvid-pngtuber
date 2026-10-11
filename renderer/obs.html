@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Corvid · OBS</title>
+  <link rel="stylesheet" href="/app/avatar.css">
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+    /* Margen arriba para que el salto no se corte */
+    #stage { position: fixed; top: 14%; left: 3%; right: 3%; bottom: 2%; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <script src="/app/avatar.js"></script>
+  <script src="/app/obs.js"></script>
+</body>
+</html>

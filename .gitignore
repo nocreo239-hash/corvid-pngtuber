@@ -1,0 +1,11 @@
+# Dependencias y compilados (se regeneran con npm install / npm run dist)
+node_modules/
+dist/
+
+# Intermedios de la IA (se quedan en local; el avatar final está en ia/png)
+ia/*
+!ia/png/
+
+# Python
+__pycache__/
+*.pyc
