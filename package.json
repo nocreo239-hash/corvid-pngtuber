@@ -9,7 +9,10 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win nsis portable",
-    "test:server": "node tools/test-server.js"
+    "test": "node tools/test-server.js && node tools/test-export.js && electron tools/test-renderer/main.js",
+    "test:server": "node tools/test-server.js",
+    "test:export": "node tools/test-export.js",
+    "test:renderer": "electron tools/test-renderer/main.js"
   },
   "devDependencies": {
     "electron": "^44.7.0",
