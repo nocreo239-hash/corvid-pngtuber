@@ -179,6 +179,7 @@ renderer/
 assets/raven/      El cuervo de ejemplo (SVG)
 tools/             generar_cuervo.py, cuervo_ia.py (cuervo con IA) y las pruebas
 ia/png/            El avatar final del cuervo generado con IA (listo para "Importar carpeta")
+avatares/stickman/ Avatar stickman 3/4 con gestos de brazos al hablar (tools/generar_stickman.py)
 ```
 
 Para modificar el cuervo de ejemplo, edita colores o formas en `tools/generar_cuervo.py` y ejecuta `python tools/generar_cuervo.py`.
