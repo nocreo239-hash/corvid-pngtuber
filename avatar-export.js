@@ -41,6 +41,10 @@ function writeAvatar(dest, cfg, dirs) {
   const expresiones = (cfg.expressions || []).map((ex) => {
     const carpeta = uniqueName(ex.name, usedDirs);
     for (const [slot, file] of Object.entries(SLOT_FILE)) copy(ex.frames && ex.frames[slot], path.join(dest, carpeta), file);
+    // Gestos al hablar: <expresión>/gesto1, gesto2… con los mismos nombres de archivo
+    (ex.gestos || []).forEach((set, i) => {
+      for (const [slot, file] of Object.entries(SLOT_FILE)) copy(set && set[slot], path.join(dest, carpeta, `gesto${i + 1}`), file);
+    });
     return { nombre: ex.name, carpeta, tecla: ex.hotkey || null };
   });
 

@@ -30,7 +30,8 @@ try {
     activeId: 'b',
     settings: { deviceId: 'mi-micro', scale: 120 },
     expressions: [
-      { id: 'a', name: 'Normal', hotkey: 'F1', frames: { idle: 'user:1-a.png', talk: 'asset:raven/raven_open_open.svg', blink: 'user:no-existe.png' } },
+      { id: 'a', name: 'Normal', hotkey: 'F1', frames: { idle: 'user:1-a.png', talk: 'asset:raven/raven_open_open.svg', blink: 'user:no-existe.png' },
+        gestos: [{ idle: 'user:1-a.png', talk: null }, { idle: null }, { talk: 'user:2-sombrero.png' }] },
       { id: 'b', name: 'Feliz: ¿sí?', hotkey: null, frames: { idle: 'user:1-a.png' } },
     ],
     accessories: [
@@ -40,7 +41,10 @@ try {
     ],
   };
   const n = writeAvatar(dest, cfg, dirs);
-  assert.strictEqual(n, 4, 'debía copiar 4 imágenes (la que no existe se salta)');
+  assert.strictEqual(n, 6, 'debía copiar 6 imágenes (4 + 2 de gestos; la que no existe se salta)');
+  assert.ok(fs.existsSync(path.join(dest, 'Normal', 'gesto1', 'quieto.png')), 'falta el gesto 1');
+  assert.ok(!fs.existsSync(path.join(dest, 'Normal', 'gesto2')), 'un gesto vacío no debe crear carpeta');
+  assert.ok(fs.existsSync(path.join(dest, 'Normal', 'gesto3', 'hablando.png')), 'falta el gesto 3');
 
   const j = JSON.parse(fs.readFileSync(path.join(dest, 'avatar.json'), 'utf-8'));
   assert.strictEqual(j.formato, 'corvid-avatar');
@@ -48,7 +52,7 @@ try {
   assert.ok(!('deviceId' in j.ajustes), 'el micrófono no se exporta');
   assert.strictEqual(j.ajustes.scale, 120);
   assert.deepStrictEqual(j.expresiones.map((e) => [e.nombre, e.carpeta, e.tecla]), [['Normal', 'Normal', 'F1'], ['Feliz: ¿sí?', 'Feliz ¿sí', null]]);
-  assert.deepStrictEqual(fs.readdirSync(path.join(dest, 'Normal')).sort(), ['hablando.svg', 'quieto.png']);
+  assert.deepStrictEqual(fs.readdirSync(path.join(dest, 'Normal')).sort(), ['gesto1', 'gesto3', 'hablando.svg', 'quieto.png']);
   assert.strictEqual(fs.readFileSync(path.join(dest, 'Normal', 'quieto.png'), 'utf-8'), 'png-a');
   assert.strictEqual(j.accesorios.length, 1, 'el accesorio sin imagen no se exporta');
   const s = j.accesorios[0];

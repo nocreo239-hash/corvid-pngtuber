@@ -48,6 +48,14 @@ En la pestaña **Expresiones**, cada expresión tiene 5 casillas. Arrastra un PN
 
 Consejos: usa PNG con fondo transparente, todas las imágenes del **mismo tamaño** y con el personaje en la **misma posición** (si no, salta al cambiar). Los GIF animados también funcionan. No hay límite de expresiones.
 
+### Gestos al hablar (alas, brazos…)
+
+Cada expresión tiene además **hasta 3 gestos** (desplegable *Gestos al hablar* de su tarjeta), cada uno con sus
+mismas 5 casillas pero con el personaje en otra postura: un ala levantada, los brazos abiertos… Al empezar a hablar
+se elige uno y se mantiene unos segundos (la boca sigue abriéndose y cerrándose con tu voz); luego cambia a otro, y
+cuando te callas un rato vuelve a la postura de arriba. Se ajusta en **Animación → Gestos al hablar**.
+La cabeza debe estar en el mismo sitio en todos los gestos para que la cara no salte.
+
 ### Importar una carpeta
 
 **Importar carpeta** carga muchas expresiones de una vez. Elige una carpeta con una subcarpeta por expresión:
@@ -56,6 +64,7 @@ Consejos: usa PNG con fondo transparente, todas las imágenes del **mismo tamañ
 mi_personaje/
   normal/   quieto.png  hablando.png  parpadeo.png  parpadeo_hablando.png  grito.png
   feliz/    quieto.png  hablando.png  grito.png
+    gesto1/ quieto.png  hablando.png  parpadeo.png  …   (gestos al hablar: gesto1, gesto2, gesto3)
 ```
 
 El nombre de la subcarpeta es el de la expresión. Si ya existe una con ese nombre, se actualizan sus imágenes. También valen los nombres en inglés (`idle`, `talk`, `blink`, `talk_blink`, `shout`).

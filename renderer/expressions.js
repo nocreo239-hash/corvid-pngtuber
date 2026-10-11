@@ -3,8 +3,8 @@
 
 // ---------- Expresiones ----------
 
-function slotFallbackNote(ex, slot) {
-  if (ex.frames[slot]) return '';
+function slotFallbackNote(set, slot) {
+  if (set[slot]) return '';
   if (slot === 'talk') return 'usa Quieto';
   if (slot === 'blink') return 'sin parpadeo';
   if (slot === 'talkBlink') return 'no parpadea al hablar';
@@ -27,7 +27,12 @@ function renderExpressions() {
         <button class="icon-btn" data-act="dup" title="Duplicar">⧉</button>
         <button class="icon-btn danger" data-act="del" title="Borrar">✕</button>
       </div>
-      <div class="slots"></div>`;
+      <div class="slots"></div>
+      <details class="gestos">
+        <summary></summary>
+        <p class="muted small">Mientras hablas, el personaje alterna entre estos gestos (por ejemplo, alas o brazos en otra
+          posición) y vuelve al de arriba cuando te callas un rato. Cada gesto tiene sus propias casillas.</p>
+      </details>`;
     const nameInput = card.querySelector('.expr-name');
     nameInput.value = ex.name;
     nameInput.addEventListener('input', () => { ex.name = nameInput.value || 'Sin nombre'; scheduleSave(); renderQuickbar(); });
@@ -45,29 +50,44 @@ function renderExpressions() {
 
     const slots = card.querySelector('.slots');
     SLOTS.forEach(({ key, label }) => slots.appendChild(buildSlot(ex, key, label)));
+
+    // Gestos al hablar: hasta MAX_GESTOS series más de casillas
+    const det = card.querySelector('.gestos');
+    const usados = gestosOf(ex).filter(hasFrames).length;
+    det.querySelector('summary').textContent = `Gestos al hablar${usados ? ` (${usados})` : ''}`;
+    det.open = openGestos.has(ex.id);
+    det.addEventListener('toggle', () => (det.open ? openGestos.add(ex.id) : openGestos.delete(ex.id)));
+    gestosOf(ex).forEach((set, i) => {
+      const row = document.createElement('div');
+      row.className = 'gesto-row';
+      row.innerHTML = `<div class="gesto-title">Gesto ${i + 1}</div><div class="slots"></div>`;
+      SLOTS.forEach(({ key, label }) => row.querySelector('.slots').appendChild(buildSlot(ex, key, label, set)));
+      det.appendChild(row);
+    });
     list.appendChild(card);
   });
   highlightActiveCard();
 }
 
-function buildSlot(ex, key, label) {
+// set: la serie de imágenes a la que pertenece la casilla (ex.frames o uno de los gestos)
+function buildSlot(ex, key, label, set = ex.frames) {
   const slot = document.createElement('div');
   slot.className = 'slot';
-  const ref = ex.frames[key];
+  const ref = set[key];
   slot.innerHTML = `
     <div class="slot-img ${ref ? 'filled' : ''}">
       ${ref ? `<img alt="" src="${view.resolve(ref)}">` : '<span class="plus">+</span>'}
       ${ref ? '<button class="slot-clear" title="Quitar">✕</button>' : ''}
     </div>
-    <div class="slot-label">${label}<span class="muted">${slotFallbackNote(ex, key)}</span></div>`;
+    <div class="slot-label">${label}<span class="muted">${slotFallbackNote(set, key)}</span></div>`;
   const box = slot.querySelector('.slot-img');
 
   box.addEventListener('click', (e) => {
     if (e.target.closest('.slot-clear')) return;
-    pickFileFor(ex, key);
+    pickFileFor(ex, key, set);
   });
   const clear = slot.querySelector('.slot-clear');
-  if (clear) clear.addEventListener('click', () => { ex.frames[key] = null; scheduleSave(); renderExpressions(); });
+  if (clear) clear.addEventListener('click', () => { set[key] = null; scheduleSave(); renderExpressions(); });
 
   box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('drag'); });
   box.addEventListener('dragleave', () => box.classList.remove('drag'));
@@ -75,25 +95,26 @@ function buildSlot(ex, key, label) {
     e.preventDefault();
     box.classList.remove('drag');
     const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) importImage(file, ex, key);
+    if (file) importImage(file, ex, key, set);
   });
   return slot;
 }
 
 let pickTarget = null;
-function pickFileFor(ex, key) {
-  pickTarget = { ex, key };
+const openGestos = new Set(); // tarjetas con "Gestos al hablar" desplegado (sobrevive al repintado)
+function pickFileFor(ex, key, set = ex.frames) {
+  pickTarget = { ex, key, set };
   const picker = $('#filePicker');
   picker.value = '';
   picker.click();
 }
 
-async function importImage(file, ex, key) {
+async function importImage(file, ex, key, set = ex.frames) {
   if (!/\.(png|gif|webp|jpe?g|svg)$/i.test(file.name)) return toast('Usa PNG, GIF, WEBP, JPG o SVG', 'error');
   if (file.size > 20 * 1024 * 1024) return toast('La imagen pesa más de 20 MB', 'error');
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
-    ex.frames[key] = await api.saveImage(file.name, bytes);
+    set[key] = await api.saveImage(file.name, bytes);
     setActive(ex.id);
     scheduleSave();
     renderExpressions();
@@ -103,8 +124,8 @@ async function importImage(file, ex, key) {
   }
 }
 
-function newExpr(name, frames = {}) {
-  return { id: uid(), name, hotkey: nextFreeKey(), frames: { ...emptyFrames(), ...frames } };
+function newExpr(name, frames = {}, gestos = []) {
+  return { id: uid(), name, hotkey: nextFreeKey(), frames: { ...emptyFrames(), ...frames }, gestos: gestos.map((g) => ({ ...emptyFrames(), ...g })) };
 }
 
 function addExpr() {
@@ -117,7 +138,7 @@ function addExpr() {
 }
 
 function duplicateExpr(src) {
-  const ex = newExpr(`${src.name} (copia)`, src.frames);
+  const ex = newExpr(`${src.name} (copia)`, src.frames, src.gestos || []);
   cfg.expressions.splice(cfg.expressions.indexOf(src) + 1, 0, ex);
   setActive(ex.id);
   renderExpressions();

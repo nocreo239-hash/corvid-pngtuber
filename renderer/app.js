@@ -119,7 +119,7 @@ function wireStaticUi() {
   $('#filePicker').addEventListener('change', (e) => {
     const file = e.target.files && e.target.files[0];
     if (file && pickTarget && pickTarget.acc) importAccessoryImage(file, pickTarget.acc);
-    else if (file && pickTarget) importImage(file, pickTarget.ex, pickTarget.key);
+    else if (file && pickTarget) importImage(file, pickTarget.ex, pickTarget.key, pickTarget.set);
     pickTarget = null;
   });
 

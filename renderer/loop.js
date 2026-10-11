@@ -9,8 +9,37 @@ function scheduleBlink(now) {
   nextBlink = now + (min + Math.random() * (max - min)) * 1000;
 }
 
+// ---------- Gestos al hablar ----------
+// Al empezar a hablar se elige un gesto (alas/brazos en otra posición) y se mantiene unos segundos
+// mientras la boca sigue abriéndose y cerrándose con la voz; luego cambia a otro. Tras un rato callado
+// (gestureHold) vuelve al reposo. Así los brazos no saltan al reposo en cada pausa entre sílabas.
+let gesture = 0;        // 0 = reposo (ex.frames); 1..MAX_GESTOS = ex.gestos[gesture - 1]
+let nextGesture = 0;    // cuándo cambiar al siguiente gesto
+let lastTalkAt = -1e9;
+
+function updateGesture(now, ex) {
+  const avail = gestosOf(ex).map((g, i) => (hasFrames(g) ? i + 1 : 0)).filter(Boolean);
+  if (!S.gestures || !avail.length) { gesture = 0; return; }
+  if (talking) lastTalkAt = now;
+  if (gesture && !avail.includes(gesture)) gesture = 0; // cambió la expresión
+  const otro = () => {
+    const opts = avail.length > 1 ? avail.filter((g) => g !== gesture) : avail;
+    return opts[Math.floor(Math.random() * opts.length)];
+  };
+  const duracion = () => S.gestureEvery * 1000 * (0.7 + Math.random() * 0.6); // algo irregular, más natural
+  if (talking && !gesture) {
+    gesture = otro();
+    nextGesture = now + duracion();
+  } else if (gesture && talking && now >= nextGesture) {
+    gesture = otro();
+    nextGesture = now + duracion();
+  } else if (gesture && now - lastTalkAt > S.gestureHold * 1000) {
+    gesture = 0;
+  }
+}
+
 function pickFrame(ex) {
-  const f = ex.frames;
+  const f = gesture ? ex.gestos[gesture - 1] : ex.frames;
   if (shouting && f.shout) return f.shout;
   if (talking) return (blinking && f.talkBlink) || f.talk || f.idle;
   if (blinking && f.blink) return f.blink;
@@ -41,9 +70,10 @@ const accessoryInExpr = (a, ex) => !a.exprs || !a.exprs.length || a.exprs.includ
 // imágenes en cada cambio sube la de la GPU de ~125 a ~250 MB. Chromium ya no retiene las ocultas.)
 let preloadCache = { key: null, refs: [] };
 function allFrames() {
-  const key = JSON.stringify(cfg.expressions.map((e) => e.frames));
+  const sets = cfg.expressions.flatMap((e) => [e.frames, ...(e.gestos || [])]);
+  const key = JSON.stringify(sets);
   if (preloadCache.key !== key) {
-    preloadCache = { key, refs: [...new Set(cfg.expressions.flatMap((e) => Object.values(e.frames)).filter(Boolean))] };
+    preloadCache = { key, refs: [...new Set(sets.flatMap((f) => Object.values(f || {})).filter(Boolean))] };
   }
   return preloadCache.refs;
 }
@@ -67,9 +97,11 @@ function tick() {
   }
 
   const ex = activeExpr();
+  updateGesture(now, ex);
   const state = {
     src: pickFrame(ex),
     exprId: ex.id,
+    gesture,
     talking,
     shouting,
     anim: {

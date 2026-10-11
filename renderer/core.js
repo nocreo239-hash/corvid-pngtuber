@@ -34,6 +34,9 @@ const DEFAULT_SETTINGS = {
   blinkMin: 2.5,
   blinkMax: 6,
   blinkMs: 140,
+  gestures: true,     // alternar entre los gestos de la expresión mientras se habla
+  gestureEvery: 2.4,  // segundos (aprox.) que dura cada gesto mientras sigues hablando
+  gestureHold: 1.2,   // segundos callado antes de volver al reposo
   captureBg: '#00ff00',
   modifier: 'ctrl-shift', // solo para las teclas por defecto (Ctrl+Shift+1…9)
   muteKey: null,
@@ -48,6 +51,16 @@ const SLOTS = [
   { key: 'shout', label: 'Grito' },
 ];
 const emptyFrames = () => Object.fromEntries(SLOTS.map((s) => [s.key, null]));
+const hasFrames = (set) => !!set && Object.values(set).some(Boolean);
+
+// Gestos al hablar: series extra de casillas (alas, brazos… en otra posición). Siempre MAX_GESTOS series.
+const MAX_GESTOS = 3;
+function gestosOf(ex) {
+  if (!Array.isArray(ex.gestos)) ex.gestos = [];
+  for (let i = 0; i < MAX_GESTOS; i++) ex.gestos[i] = { ...emptyFrames(), ...(ex.gestos[i] || {}) };
+  ex.gestos.length = MAX_GESTOS;
+  return ex.gestos;
+}
 
 const raven = (eyes, beak) => `asset:raven/raven_${eyes}_${beak}.svg`;
 

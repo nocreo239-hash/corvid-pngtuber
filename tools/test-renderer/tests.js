@@ -97,6 +97,31 @@ async function runTests(group, assetsDir) {
     blinking = true; eq(pickFrame(feliz), feliz.frames.idle); blinking = false;
   });
 
+  await test('gestos al hablar: elige uno, lo mantiene en las pausas, cambia y vuelve al reposo', () => {
+    const ex = cfg.expressions[0];
+    const g = gestosOf(ex);
+    g[0].idle = 'asset:g1-quieto'; g[0].talk = 'asset:g1-habla';
+    g[2].idle = 'asset:g3-quieto'; g[2].talk = 'asset:g3-habla'; // el gesto 2 queda vacío: no se usa
+    S.gestures = true; S.gestureEvery = 2; S.gestureHold = 1;
+    gesture = 0; talking = false; blinking = false; shouting = false;
+    updateGesture(0, ex); eq(gesture, 0, 'callado debía estar en reposo');
+    talking = true; updateGesture(1000, ex);
+    ok([1, 3].includes(gesture), `al hablar debía elegir el gesto 1 o 3 (eligió ${gesture})`);
+    const primero = gesture;
+    eq(pickFrame(ex), `asset:g${primero}-habla`);
+    talking = false; updateGesture(1500, ex);
+    eq(gesture, primero, 'en una pausa corta debía mantener el gesto');
+    eq(pickFrame(ex), `asset:g${primero}-quieto`, 'en la pausa: mismo gesto con la boca cerrada');
+    talking = true; updateGesture(1000 + 2000 * 1.31, ex);
+    ok(gesture && gesture !== primero, 'tras ~2 s hablando debía cambiar al otro gesto');
+    talking = false; updateGesture(9000, ex); updateGesture(9000 + 1100, ex);
+    eq(gesture, 0, 'tras callar más de 1 s debía volver al reposo');
+    eq(pickFrame(ex), ex.frames.idle);
+    S.gestures = false; talking = true; updateGesture(20000, ex); eq(gesture, 0, 'desactivado: siempre reposo');
+    S.gestures = true; talking = false; gesture = 0;
+    g[0].idle = g[0].talk = g[2].idle = g[2].talk = null;
+  });
+
   await test('accesorios: poner/quitar con atajo, "solo al gritar" y "solo en estas expresiones"', async () => {
     addAccessory();
     const a = cfg.accessories[0];
@@ -148,6 +173,9 @@ async function runTests(group, assetsDir) {
       jsonFile(manifest, 'Av/avatar.json'),
       file(raven('open_closed'), 'Av/Normal/quieto.svg'),
       file(raven('open_open'), 'Av/Normal/hablando.svg'),
+      file(raven('happy_open'), 'Av/Normal/gesto2/hablando.svg'),
+      file(raven('happy_closed'), 'Av/Normal/gesto2/quieto.svg'),
+      file(raven('happy_closed'), 'Av/Normal/gesto9/quieto.svg'), // fuera de rango: se ignora
       file(raven('wide_closed'), 'Av/Mareado ¿sí/quieto.svg'),
       file(raven('wide_wide'), 'Av/accesorios/Gorra.svg'),
       file(raven('wide_wide'), 'Av/notas.txt'),
@@ -157,7 +185,11 @@ async function runTests(group, assetsDir) {
     const mareado = cfg.expressions.find((e) => e.name === 'Mareado: ¿sí?');
     ok(mareado, 'no conservó el nombre original');
     eq(mareado.hotkey, 'F2');
-    eq(cfg.expressions.find((e) => e.name === 'Normal').hotkey, 'F1');
+    const normal = cfg.expressions.find((e) => e.name === 'Normal');
+    eq(normal.hotkey, 'F1');
+    ok(normal.gestos[1].talk && normal.gestos[1].idle, 'no importó el gesto 2');
+    ok(!hasFrames(normal.gestos[0]) && !hasFrames(normal.gestos[2]), 'gestos que no venían deben quedar vacíos');
+    ok(!cfg.expressions.some((e) => /gesto/i.test(e.name)), 'una carpeta gestoN no es una expresión');
     eq(activeExpr().name, 'Mareado: ¿sí?');
     const g = cfg.accessories.find((a) => a.name === 'Gorra');
     eq([g.hotkey, g.on, g.behind, g.when, g.inertia, g.adjust.rot], ['F11', true, true, 'hablando', 20, 10]);

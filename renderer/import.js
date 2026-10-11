@@ -4,6 +4,7 @@
 // ---------- Importar carpeta ----------
 // Una subcarpeta por expresión con quieto.png, hablando.png, parpadeo.png, parpadeo_hablando.png y grito.png
 // (también vale una sola carpeta con esos archivos, o los nombres en inglés: idle, talk, blink, talk_blink, shout).
+// Dentro de cada expresión, las subcarpetas gesto1, gesto2, gesto3 traen los gestos al hablar (mismos nombres).
 
 const FILE_SLOT = {
   quieto: 'idle', idle: 'idle',
@@ -16,7 +17,7 @@ const normName = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[_-]
 const prettyName = (s) => { const n = s.replace(/[_-]+/g, ' ').trim(); return n.charAt(0).toUpperCase() + n.slice(1); };
 
 async function importFolder(fileList) {
-  const groups = new Map(); // carpeta -> { slot: File }
+  const groups = new Map(); // carpeta -> { frames: { slot: File }, gestos: { n: { slot: File } } }
   const accFiles = []; // archivos de la subcarpeta "accesorios": uno por accesorio
   let manifest = null; // avatar.json de "Exportar avatar": nombres exactos, teclas y ajustes
   for (const file of fileList) {
@@ -35,9 +36,15 @@ async function importFolder(fileList) {
     const m = parts[parts.length - 1].toLowerCase().match(/^(.+)\.(png|gif|webp|jpe?g|svg)$/);
     const slot = m && FILE_SLOT[m[1]];
     if (!slot) continue;
-    const dir = parts.length >= 2 ? parts[parts.length - 2] : 'Importada';
-    if (!groups.has(dir)) groups.set(dir, {});
-    groups.get(dir)[slot] = file;
+    // .../<expresión>/gesto2/hablando.png → gesto 2 de esa expresión
+    const g = parts.length >= 3 && parts[parts.length - 2].toLowerCase().match(/^gesto\s*_?([1-9])$/);
+    const n = g ? Number(g[1]) : 0;
+    if (n > MAX_GESTOS) continue;
+    const dir = g ? parts[parts.length - 3] : parts.length >= 2 ? parts[parts.length - 2] : 'Importada';
+    if (!groups.has(dir)) groups.set(dir, { frames: {}, gestos: {} });
+    const grp = groups.get(dir);
+    if (n) (grp.gestos[n] = grp.gestos[n] || {})[slot] = file;
+    else grp.frames[slot] = file;
   }
   if (!groups.size && !accFiles.length) return toast('No encontré quieto.png, hablando.png… en esa carpeta', 'error');
 
@@ -58,6 +65,7 @@ async function importFolder(fileList) {
       let ex = cfg.expressions.find((e) => normName(e.name) === normName(name));
       if (ex) {
         ex.frames = emptyFrames();
+        ex.gestos = [];
         actualizadas += 1;
       } else {
         ex = newExpr(name);
@@ -65,8 +73,12 @@ async function importFolder(fileList) {
         cfg.expressions.push(ex);
         nuevas += 1;
       }
-      for (const [slot, file] of Object.entries(groups.get(dir))) {
-        ex.frames[slot] = await api.saveImage(file.name, new Uint8Array(await file.arrayBuffer()));
+      const grp = groups.get(dir);
+      const save = async (file) => api.saveImage(file.name, new Uint8Array(await file.arrayBuffer()));
+      for (const [slot, file] of Object.entries(grp.frames)) ex.frames[slot] = await save(file);
+      const gestos = gestosOf(ex);
+      for (const [n, slots] of Object.entries(grp.gestos)) {
+        for (const [slot, file] of Object.entries(slots)) gestos[n - 1][slot] = await save(file);
       }
       imported.push([ex, mExpr.get(dir)]);
     }
