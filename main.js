@@ -190,11 +190,16 @@ function registerIpc() {
 
   ipcMain.handle('config:load', () => readConfig());
 
-  ipcMain.handle('config:save', (_e, cfg) => {
+  const saveConfig = (cfg) => {
     const tmp = CONFIG_PATH + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2), 'utf-8');
     fs.renameSync(tmp, CONFIG_PATH);
     return true;
+  };
+  ipcMain.handle('config:save', (_e, cfg) => saveConfig(cfg));
+  // Versión síncrona para el cierre de la ventana: si no, el último cambio (aún en espera) se perdería.
+  ipcMain.on('config:save-sync', (e, cfg) => {
+    try { e.returnValue = saveConfig(cfg); } catch { e.returnValue = false; }
   });
 
   ipcMain.handle('image:save', (_e, { name, data }) => {

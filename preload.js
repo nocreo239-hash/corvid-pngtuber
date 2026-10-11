@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('corvid', {
   info: () => ipcRenderer.invoke('app:info'),
   loadConfig: () => ipcRenderer.invoke('config:load'),
   saveConfig: (cfg) => ipcRenderer.invoke('config:save', cfg),
+  saveConfigSync: (cfg) => ipcRenderer.sendSync('config:save-sync', cfg),
   saveImage: (name, data) => ipcRenderer.invoke('image:save', { name, data }),
   pushState: (state) => ipcRenderer.send('state:push', state),
   setHotkeys: (bindings) => ipcRenderer.invoke('hotkeys:set', bindings),

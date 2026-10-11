@@ -152,8 +152,11 @@
       const seen = new Set();
       list.forEach((a) => {
         if (!a.src) return;
-        seen.add(a.src);
-        let l = this.accs.get(a.src);
+        // Por accesorio (no por imagen): dos accesorios pueden usar la misma imagen con ajustes distintos.
+        const key = a.id || a.src;
+        seen.add(key);
+        let l = this.accs.get(key);
+        if (l && l.src !== a.src) { l.wrap.remove(); this.accs.delete(key); l = null; } // cambió la imagen
         if (!l) {
           // wrap: física · adj: ajuste del usuario (posición, tamaño, giro) · img: tiembla con el CSS
           const wrap = document.createElement('div');
@@ -167,9 +170,9 @@
           el.src = this.resolve(a.src);
           adj.appendChild(el);
           wrap.appendChild(adj);
-          l = { wrap, adj, el, box: null, phys: { x: 0, y: 0, vx: 0, vy: 0, r: 0, vr: 0 } };
+          l = { src: a.src, wrap, adj, el, box: null, phys: { x: 0, y: 0, vx: 0, vy: 0, r: 0, vr: 0 } };
           l.ready = el.decode().catch(() => {}).then(() => { l.box = measureBox(el); });
-          this.accs.set(a.src, l);
+          this.accs.set(key, l);
         }
         l.cfg = a;
         // En el orden de la lista: el último queda encima.

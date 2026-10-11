@@ -38,7 +38,13 @@ function handleApi(req, res, pathname, { apiKey, getExpressions, getAccessories,
   const clave = new URL(req.url, 'http://localhost').searchParams.get('clave');
   if (!apiKey || clave !== apiKey) return json(403, { ok: false, error: 'Falta la clave o no es correcta' });
 
-  const parts = pathname.split('/').filter(Boolean).slice(1); // sin "api"
+  // Se parte la dirección sin decodificar y luego cada trozo: así un "/" del nombre (%2F) no la rompe.
+  let parts;
+  try {
+    parts = new URL(req.url, 'http://localhost').pathname.split('/').filter(Boolean).slice(1).map(decodeURIComponent); // sin "api"
+  } catch {
+    return json(400, { ok: false, error: 'Dirección mal formada' });
+  }
   const exprs = getExpressions ? getExpressions() : [];
   const lista = () => exprs.map((e, i) => ({ numero: i + 1, nombre: e.name, id: e.id }));
 
@@ -48,11 +54,14 @@ function handleApi(req, res, pathname, { apiKey, getExpressions, getAccessories,
   if (parts[0] === 'expresiones') return json(200, { ok: true, expresiones: lista(), accesorios: listaAcc() });
 
   if (parts[0] === 'accesorio' && parts[1]) {
+    // /api/accesorio/<nombre>[/poner|quitar|alternar]; un "/" en el nombre llega codificado (%2F).
+    const ACCIONES = { poner: true, quitar: false, alternar: null };
+    const conAccion = parts.length > 2;
     const q = parts[1];
     const n = /^\d+$/.test(q) ? Number(q) : NaN;
     const a = (n >= 1 && accs[n - 1]) || accs.find((x) => x.id === q) || accs.find((x) => normName(x.name) === normName(q));
     if (!a) return json(404, { ok: false, error: `No hay ningún accesorio “${q}”`, accesorios: listaAcc() });
-    const accion = { poner: true, quitar: false, alternar: null }[parts[2] || 'alternar'];
+    const accion = conAccion ? ACCIONES[parts[parts.length - 1]] : null;
     if (accion === undefined) return json(404, { ok: false, error: 'Usa /poner, /quitar o /alternar' });
     onCommand(accion === null ? { type: 'accessory', id: a.id } : { type: 'accessorySet', id: a.id, value: accion });
     return json(200, { ok: true, accesorio: a.name });
@@ -177,6 +186,8 @@ function createAvatarServer({ rendererDir, assetsDir, imagesDir, onClientsChange
         });
         server.listen(port, '127.0.0.1', () => {
           server.removeAllListeners('error');
+          // Un error del servidor ya en marcha no debe cerrar la app (sin oyente, Node lo lanzaría).
+          server.on('error', (err) => console.error('Servidor de OBS:', err));
           resolve(port);
         });
       };

@@ -22,7 +22,7 @@ const get = (port, p, headers = {}) => new Promise((resolve, reject) => {
     onClientsChange: (n) => (clients = n),
     apiKey: 'k1',
     getExpressions: () => [{ id: 'a', name: 'Feliz' }, { id: 'b', name: 'Llorando risa' }, { id: 'c', name: 'Señor Ñu' }],
-    getAccessories: () => [{ id: 'h', name: 'Sombrero vaquero' }],
+    getAccessories: () => [{ id: 'h', name: 'Sombrero vaquero' }, { id: 'g', name: 'Gafas 3D/rojas' }],
     onCommand: (c) => commands.push(c),
   });
   const commands = [];
@@ -46,6 +46,10 @@ const get = (port, p, headers = {}) => new Promise((resolve, reject) => {
   assert.strictEqual((await get(port, '/api/accesorio/gafas?clave=k1')).status, 404);
   assert.strictEqual((await get(port, '/api/accesorio/1/bailar?clave=k1')).status, 404);
   assert.strictEqual(JSON.parse((await get(port, '/api/expresiones?clave=k1')).body).accesorios[0].nombre, 'Sombrero vaquero');
+  // Nombre con "/" (la dirección lo codifica como %2F)
+  assert.strictEqual((await get(port, `/api/accesorio/${encodeURIComponent('Gafas_3D/rojas')}/poner?clave=k1`)).status, 200);
+  assert.strictEqual((await get(port, `/api/accesorio/${encodeURIComponent('Gafas_3D/rojas')}?clave=k1`)).status, 200);
+  commands.splice(-2).forEach((c, i) => assert.deepStrictEqual(c, i ? { type: 'accessory', id: 'g' } : { type: 'accessorySet', id: 'g', value: true }));
   assert.deepStrictEqual(commands, [
     { type: 'expression', id: 'b' }, { type: 'expression', id: 'b' }, { type: 'expression', id: 'c' },
     { type: 'cycle', dir: 1 }, { type: 'muteSet', value: true },

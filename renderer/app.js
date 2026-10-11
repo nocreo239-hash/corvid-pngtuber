@@ -148,14 +148,24 @@ function toast(msg, kind = '') {
   el.textContent = msg;
   el.className = `toast show ${kind}`;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => (el.className = 'toast'), 2600);
+  toastTimer = setTimeout(() => (el.className = 'toast'), Math.max(2600, msg.length * 55)); // da tiempo a leerlo
 }
 
 let saveTimer = null;
 function scheduleSave() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => api.saveConfig(cfg).catch(() => toast('No se pudo guardar la configuración', 'error')), 350);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    api.saveConfig(cfg).catch(() => toast('No se pudo guardar la configuración', 'error'));
+  }, 350);
 }
+// Al cerrar la app con un guardado pendiente, guardar ya (de forma síncrona: después no hay tiempo).
+window.addEventListener('beforeunload', () => {
+  if (!saveTimer) return;
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  api.saveConfigSync(cfg);
+});
 
 function activeExpr() {
   return cfg.expressions.find((e) => e.id === cfg.activeId) || cfg.expressions[0];
@@ -319,7 +329,7 @@ function tick() {
     },
     layout: { scale: S.scale, x: S.offsetX, y: S.offsetY, flip: S.flip },
     accessories: cfg.accessories.map((a) => ({
-      src: a.src, on: !!a.on && accessoryWhen(a) && accessoryInExpr(a, ex), behind: !!a.behind, inertia: a.inertia ?? 50, adjust: a.adjust || null,
+      id: a.id, src: a.src, on: !!a.on && accessoryWhen(a) && accessoryInExpr(a, ex), behind: !!a.behind, inertia: a.inertia ?? 50, adjust: a.adjust || null,
     })),
     preload: allFrames(),
   };
@@ -397,6 +407,7 @@ const syncers = [];
 function buildMicControls() {
   const box = $('#micControls');
   box.innerHTML = '';
+  syncers.length = 0; // los de una construcción anterior apuntan a controles que ya no existen
   const talk = sliderRow({ key: 'talkThreshold', label: 'Umbral para hablar', min: 0.05, max: 0.95, step: 0.01, fmt: pct,
     onChange: (v) => { if (S.shoutThreshold < v + 0.05) { S.shoutThreshold = Math.min(1, v + 0.05); shout.sync(); } } });
   const shout = sliderRow({ key: 'shoutThreshold', label: 'Umbral para gritar', min: 0.1, max: 1, step: 0.01, fmt: pct,
@@ -680,7 +691,7 @@ function buildAdjustPanel(box, a) {
 function wireAdjustOnStage() {
   const stage = $('#stage');
   const pxToPct = (dxScreen, a) => {
-    const l = view.accs.get(a.src);
+    const l = view.accs.get(a.id);
     if (!l) return 0;
     const d = view.drawnSize(l);
     const sc = (S.scale || 100) / 100;
@@ -921,6 +932,7 @@ async function importFolder(fileList) {
     toast('No pude guardar alguna imagen', 'error');
   }
 
+  const avisos = []; // se muestran al final (un toast intermedio quedaría tapado por el de "Listo")
   if (manifest) {
     // Teclas: solo si están libres (no se le quita la tecla a nada que ya tengas).
     for (const [item, info] of imported) {
@@ -935,7 +947,12 @@ async function importFolder(fileList) {
     if (manifest.ajustes && confirm('¿Aplicar también los ajustes guardados en el avatar (micrófono, animación, tamaño y posición, teclas de silenciar y modo captura)?')) {
       const keep = S.deviceId;
       Object.assign(S, manifest.ajustes, { deviceId: keep });
-      syncers.forEach((s) => s.sync && s.sync());
+      // Las teclas de silenciar / modo captura del avatar no pueden quitarle la suya a una expresión o accesorio.
+      const itemKeys = new Set([...cfg.expressions, ...cfg.accessories].map((x) => x.hotkey).filter(Boolean));
+      for (const k of ['muteKey', 'captureKey']) {
+        if (S[k] && itemKeys.has(S[k])) { avisos.push(`${keyLabel(S[k])} ya la usaba otra cosa: elige otra tecla para ${k === 'muteKey' ? 'silenciar' : 'el modo captura'} en la pestaña OBS`); S[k] = null; }
+      }
+      if (S.muteKey && S.muteKey === S.captureKey) S.captureKey = null;
       buildMicControls();
       buildAnimControls();
     }
@@ -945,7 +962,9 @@ async function importFolder(fileList) {
   renderQuickbar();
   scheduleSave();
   applyHotkeys();
-  toast(`Listo: ${nuevas} nuevas, ${actualizadas} actualizadas`);
+  const resumen = `Listo: ${nuevas} nuevas, ${actualizadas} actualizadas`;
+  if (avisos.length) toast(`${resumen}. Ojo: ${avisos.join('. ')}`, 'error');
+  else toast(resumen);
 }
 
 function deleteExpr(ex) {

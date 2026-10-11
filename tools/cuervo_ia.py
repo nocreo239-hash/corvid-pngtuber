@@ -302,7 +302,6 @@ def extraer_por_color(base, editada, zona, tonos=(6, 36), sat_min=70, cierre=31,
     dx, dy = _desplazamiento(base, editada)
     editada = ImageChops.offset(editada, dx, dy)
     h, s, v = editada.convert("HSV").split()
-    color = Image.merge("RGB", (h, s, v)).point(lambda x: x)  # solo para tener las 3 bandas a mano
     hp, sp, vp = h.load(), s.load(), v.load()
     w, alto = editada.size
     m = Image.new("L", editada.size, 0)
