@@ -166,7 +166,16 @@
   <input type="file" id="filePicker" accept=".png,.gif,.webp,.jpg,.jpeg,.svg" hidden>
   <input type="file" id="folderPicker" webkitdirectory hidden>
 
+  <!-- Scripts clásicos que comparten variables globales; el orden importa: core primero, app (inicio) al final -->
   <script src="avatar.js"></script>
+  <script src="core.js"></script>
+  <script src="keys.js"></script>
+  <script src="audio.js"></script>
+  <script src="loop.js"></script>
+  <script src="controls.js"></script>
+  <script src="expressions.js"></script>
+  <script src="accessories.js"></script>
+  <script src="import.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

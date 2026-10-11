@@ -1,7 +1,7 @@
 {
   "name": "corvid-pngtuber",
   "productName": "Corvid PNGtuber",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "PNGtuber para Twitch: reacciona al micrófono, parpadea, cambia de expresión con atajos y se conecta a OBS.",
   "main": "main.js",
   "author": "allan_martian",

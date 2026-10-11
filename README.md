@@ -159,12 +159,36 @@ La app guarda una copia de cada imagen que subes. Al abrirse, borra las copias q
 ## Archivos del proyecto
 
 ```
-main.js        Ventana, atajos globales y guardado
-server.js      Servidor local para la fuente de navegador de OBS
-preload.js     Puente seguro entre la ventana y el sistema
-renderer/      Interfaz (index.html, app.js, styles.css) y vista del avatar
-assets/raven/  El cuervo de ejemplo (SVG)
-tools/         generar_cuervo.py (regenera el cuervo SVG), cuervo_ia.py (cuervo con IA) y test-server.js
+main.js            Ventana, atajos globales, guardado y exportar
+server.js          Servidor local: fuente de navegador de OBS y API para Streamer.bot
+preload.js         Puente seguro entre la ventana y el sistema
+avatar-export.js   Escribe la carpeta de "Exportar avatar"
+renderer/
+  index.html, styles.css
+  avatar.js        Vista del avatar (app y OBS): fotogramas, accesorios y física
+  obs.html, obs.js Página de la fuente de navegador
+  core.js          Base: ajustes por defecto, estado, guardar, utilidades      ┐
+  keys.js          Teclas y atajos globales                                    │ scripts que comparten
+  audio.js         Micrófono y calibración                                     │ variables globales;
+  loop.js          Bucle: qué fotograma y qué accesorios se ven               │ se cargan en este
+  controls.js      Paneles de Micrófono y Animación                            │ orden desde index.html
+  expressions.js   Expresiones                                                 │
+  accessories.js   Accesorios y su editor                                      │
+  import.js        Importar carpeta                                            │
+  app.js           Barra rápida, OBS/Streamer.bot e inicio (va el último)      ┘
+assets/raven/      El cuervo de ejemplo (SVG)
+tools/             generar_cuervo.py, cuervo_ia.py (cuervo con IA) y las pruebas
+ia/png/            El avatar final del cuervo generado con IA (listo para "Importar carpeta")
 ```
 
-Para modificar el cuervo, edita colores o formas en `tools/generar_cuervo.py` y ejecuta `python tools/generar_cuervo.py`.
+Para modificar el cuervo de ejemplo, edita colores o formas en `tools/generar_cuervo.py` y ejecuta `python tools/generar_cuervo.py`.
+
+## Pruebas
+
+```
+npm test
+```
+
+Ejecuta tres grupos: el servidor (páginas, seguridad, API), "Exportar avatar", y la ventana de la app
+(se abre oculta con un puente de pruebas: teclas, fotogramas, accesorios, importar, física, migración…).
+Sale con error si algo falla. Conviene pasarlas antes de cada `npm run dist`.

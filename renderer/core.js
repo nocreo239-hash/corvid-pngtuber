@@ -1,0 +1,128 @@
+/* Corvid PNGtuber — Base compartida: puente con Electron, ajustes por defecto, estado y utilidades */
+'use strict';
+
+const api = window.corvid;
+const $ = (sel) => document.querySelector(sel);
+
+// ---------- Configuración por defecto ----------
+
+const DEFAULT_SETTINGS = {
+  deviceId: '',
+  noiseSuppression: true,
+  gainDb: 0,
+  talkThreshold: 0.42,
+  shoutThreshold: 0.8,
+  shoutEnabled: true,
+  holdMs: 180,
+  shoutHoldMs: 250,
+  voiceFilter: true,
+  scale: 100,
+  offsetX: 0,
+  offsetY: 0,
+  flip: false,
+  bounce: true,
+  bounceHeight: 6,
+  bounceMs: 260,
+  squash: 8,
+  sway: true,
+  swayAmount: 1,
+  swaySpeed: 4,
+  breathing: true,
+  shake: true,
+  shakeAmount: 4,
+  blinkEnabled: true,
+  blinkMin: 2.5,
+  blinkMax: 6,
+  blinkMs: 140,
+  captureBg: '#00ff00',
+  modifier: 'ctrl-shift', // solo para las teclas por defecto (Ctrl+Shift+1…9)
+  muteKey: null,
+  captureKey: null,
+};
+
+const SLOTS = [
+  { key: 'idle', label: 'Quieto' },
+  { key: 'talk', label: 'Hablando' },
+  { key: 'blink', label: 'Parpadeo' },
+  { key: 'talkBlink', label: 'Parpadeo hablando' },
+  { key: 'shout', label: 'Grito' },
+];
+const emptyFrames = () => Object.fromEntries(SLOTS.map((s) => [s.key, null]));
+
+const raven = (eyes, beak) => `asset:raven/raven_${eyes}_${beak}.svg`;
+
+function ravenExpressions() {
+  const ex = (id, name, frames, i) => ({ id, name, hotkey: defaultKey(i), frames: { ...emptyFrames(), ...frames } });
+  return [
+    ex('normal', 'Normal', { idle: raven('open', 'closed'), talk: raven('open', 'open'), blink: raven('closed', 'closed'), talkBlink: raven('closed', 'open'), shout: raven('squint', 'wide') }, 0),
+    ex('feliz', 'Feliz', { idle: raven('happy', 'closed'), talk: raven('happy', 'open'), shout: raven('happy', 'wide') }, 1),
+    ex('enojado', 'Enojado', { idle: raven('angry', 'closed'), talk: raven('angry', 'open'), blink: raven('closed', 'closed'), talkBlink: raven('closed', 'open'), shout: raven('angry', 'wide') }, 2),
+    ex('sorprendido', 'Sorprendido', { idle: raven('wide', 'closed'), talk: raven('wide', 'open'), blink: raven('closed', 'closed'), talkBlink: raven('closed', 'open'), shout: raven('wide', 'wide') }, 3),
+  ];
+}
+
+
+// ---------- Estado ----------
+
+let cfg = null;      // configuración guardada
+let S = null;        // atajo a cfg.settings
+let info = { port: null, imagesUrl: '' };
+let view = null;
+
+let muted = false;
+let level = 0;
+let talkUntil = 0;
+let shoutUntil = 0;
+let talking = false;
+let shouting = false;
+let blinking = false;
+let blinkEnd = 0;
+let nextBlink = 0;
+let calib = null;
+let lastKey = '';
+let recording = false;
+let editingAccId = ''; // accesorio en modo "Ajustar"
+
+const audio = { ctx: null, stream: null, source: null, analyser: null, buf: null, error: null };
+
+// ---------- Utilidades ----------
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+let toastTimer = null;
+function toast(msg, kind = '') {
+  const el = $('#toast');
+  el.textContent = msg;
+  el.className = `toast show ${kind}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (el.className = 'toast'), Math.max(2600, msg.length * 55)); // da tiempo a leerlo
+}
+
+let saveTimer = null;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    api.saveConfig(cfg).catch(() => toast('No se pudo guardar la configuración', 'error'));
+  }, 350);
+}
+// Al cerrar la app con un guardado pendiente, guardar ya (de forma síncrona: después no hay tiempo).
+window.addEventListener('beforeunload', () => {
+  if (!saveTimer) return;
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  api.saveConfigSync(cfg);
+});
+
+function activeExpr() {
+  return cfg.expressions.find((e) => e.id === cfg.activeId) || cfg.expressions[0];
+}
+
+function setActive(id) {
+  if (!cfg.expressions.some((e) => e.id === id)) return;
+  cfg.activeId = id;
+  scheduleSave();
+  renderQuickbar();
+  highlightActiveCard();
+}
