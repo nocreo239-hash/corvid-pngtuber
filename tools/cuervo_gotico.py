@@ -60,8 +60,12 @@ PARPADEO = "the eye is closed and drawn as a simple short yellow line, keep any 
 
 ACCESORIOS = {
     "sombrero_bruja": "a small black witch hat with a purple band, sitting tilted on top of the head",
-    "sombrero_copa": "a small dark grey top hat with a purple ribbon, sitting on top of the head",
-    "gafas": "small round thin gold glasses over the eye",
+    "sombrero_copa": ("a classic black top hat with a purple ribbon band, upright, sitting on the very top of the head "
+                      "above the feather tuft, well above the eye; the eye stays fully visible"),
+    "sombrero_vaquero": ("a brown cowboy hat with a curved brim and a darker brown band, sitting on the very top of the head "
+                         "above the feather tuft, well above the eye; the eye stays fully visible"),
+    "gafas": ("round glasses made of a very thin gold wire frame with perfectly clear empty lenses (no tint, no reflection), "
+              "the frame circles around the yellow ring eye so the whole eye stays fully visible inside the lens"),
     "lazo": "a small purple ribbon bow on top of the head",
     "flor": "a small pink flower tucked on the side of the head near the eye",
     "corona": "a tiny golden crown sitting on top of the head",
@@ -113,7 +117,7 @@ def cmd_accesorios():
     for nombre, desc in ACCESORIOS.items():
         _variantes(GEN / "accesorios", nombre,
                    f"Add ONLY this accessory and change nothing else: {desc}, drawn in the same sticker style with "
-                   f"the white sticker border around it.", semillas=(7000, 7001, 7002))
+                   f"the white sticker border around it.", semillas=(7000, 7001, 7002, 7003))
 
 
 # ---------- Composición (sin IA, no gasta cuota) ----------
@@ -124,7 +128,7 @@ CABEZA = [(100, 40, 720, 640)]    # ojo, pico, mejilla y marcas alrededor de la 
 PARPADEO_DE = {"feliz": None, "sorprendido": "normal"}
 OJO = [(385, 290, 610, 540)]      # ojo y ceja
 PICO = [(180, 360, 450, 580)]
-ZONA_ACC = (120, 0, 900, 620)
+ZONA_ACC = (40, 0, 1000, 640)
 
 
 def quitar_verde(img, umbral=12):
@@ -221,7 +225,15 @@ def extraer_accesorio(base, editada, macizo=True):
     m = cambio.filter(ImageFilter.MaxFilter(11)).filter(ImageFilter.MinFilter(11))
     m = _mayor_componente(m)                          # pieza principal, huecos rellenos
     if not macizo:
-        m = ImageChops.multiply(m, cambio.filter(ImageFilter.MaxFilter(5)))
+        # gafas: solo la montura dorada (y su contorno), nunca el cristal ni el ojo redibujado debajo
+        h, s, v = editada.convert("HSV").split()
+        oro = ImageChops.multiply(ImageChops.multiply(h.point(lambda x: 255 if 14 <= x <= 45 else 0),
+                                                      s.point(lambda x: 255 if x > 90 else 0)),
+                                  v.point(lambda x: 255 if x > 90 else 0))
+        oro = ImageChops.multiply(oro, cambio)
+        oscuro = ImageChops.multiply(v.point(lambda x: 255 if x < 110 else 0), cambio)
+        m = ImageChops.lighter(oro, ImageChops.multiply(oscuro, oro.filter(ImageFilter.MaxFilter(5))))
+        m = ImageChops.multiply(m, limite)
     m = m.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(1.2))
     capa = quitar_verde(editada)
     capa.putalpha(ImageChops.multiply(capa.getchannel("A"), m))
@@ -272,10 +284,33 @@ def cmd_componer():
                 quitar_verde(cara_en_gesto(img, base, w)).save(PNG / eid / g / f"{tipo}.png")
         print("ok", eid, len(frames), "fotogramas +", len(alas), "gestos")
     (PNG / "accesorios").mkdir(parents=True, exist_ok=True)
+    dibujar_gafas().save(PNG / "accesorios" / "gafas.png")
+    print("ok accesorio gafas (dibujadas)")
     for ruta in sorted((GEN / "accesorios").glob("*.png")):
-        capa = extraer_accesorio(base, Image.open(ruta).convert("RGB"), macizo=ruta.stem != "gafas")
+        if ruta.stem == "gafas":
+            continue
+        capa = extraer_accesorio(base, Image.open(ruta).convert("RGB"))
         capa.save(PNG / "accesorios" / ruta.name)
         print("ok accesorio", ruta.stem)
+
+
+def dibujar_gafas(lado=1024, ss=4):
+    """Gafas redondas de alambre dorado, dibujadas (la IA siempre pinta reflejos encima del ojo).
+    Medidas sobre la base aprobada: aro del ojo centrado en (496, 416), radio ~63."""
+    k = ss
+    oro, contorno = (226, 182, 70, 255), (62, 50, 62, 255)
+    capas = []
+    for ancho, color in ((19, contorno), (9, oro)):
+        im = Image.new("RGBA", (lado * k, lado * k), (0, 0, 0, 0))
+        d = ImageDraw.Draw(im)
+        d.ellipse([(496 - 84) * k, (416 - 84) * k, (496 + 84) * k, (416 + 84) * k], outline=color, width=ancho * k)
+        d.ellipse([(352 - 44) * k, (404 - 70) * k, (352 + 44) * k, (404 + 70) * k], outline=color, width=ancho * k)
+        d.line([396 * k, 398 * k, 413 * k, 402 * k], fill=color, width=ancho * k)                  # puente
+        d.line([580 * k, 404 * k, 640 * k, 396 * k, 688 * k, 400 * k], fill=color, width=ancho * k, joint="curve")  # patilla
+        capas.append(im)
+    out = capas[0]
+    out.alpha_composite(capas[1])
+    return out.resize((lado, lado), Image.LANCZOS)
 
 
 def cmd_hoja(carpeta=None, salida=None):
