@@ -9,3 +9,7 @@ ia/*
 # Python
 __pycache__/
 *.pyc
+
+# Compilación local
+dist-nuevo/
+build-log.txt

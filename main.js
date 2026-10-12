@@ -97,7 +97,8 @@ function cleanUnusedImages() {
   if (!cfg || !Array.isArray(cfg.expressions)) return;
   const used = new Set();
   const refs = [
-    ...cfg.expressions.flatMap((ex) => Object.values(ex.frames || {})),
+    // Incluye los gestos: sus imágenes también se guardan como user:...
+    ...cfg.expressions.flatMap((ex) => [ex.frames, ...(ex.gestos || [])].flatMap((set) => Object.values(set || {}))),
     ...(Array.isArray(cfg.accessories) ? cfg.accessories.map((a) => a.src) : []),
   ];
   for (const ref of refs) {
