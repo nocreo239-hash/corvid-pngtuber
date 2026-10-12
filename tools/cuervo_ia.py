@@ -28,6 +28,7 @@ RAIZ = Path(__file__).resolve().parent.parent
 IA = RAIZ / "ia"
 ENV_TIENDA = Path(r"E:\assets\DOWNLOADS\Tienda\.env")
 MODELO = "@cf/black-forest-labs/flux-2-klein-4b"
+MOTOR = "cloudflare"   # o "local": ComfyUI en este PC (variable de entorno CORVID_MOTOR=local)
 LADO = 1024
 
 ESTILO = ("cute chibi vtuber mascot sticker, kawaii anime style, thick clean dark outlines, flat cel shading, "
@@ -95,7 +96,76 @@ def cargar_env():
                 os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 
+COMFY = os.environ.get("COMFY_URL", "http://127.0.0.1:8188")
+COMFY_MODELO = "flux-2-klein-4b-fp8.safetensors"   # el mismo 4B "distilled" que usa Cloudflare
+
+
+def _grafo_comfy(prompt, semilla, imagen_ref=None):
+    """Grafo (formato API de ComfyUI) de la plantilla oficial "Image Edit (Flux.2 Klein 4B Distilled)"."""
+    g = {
+        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": COMFY_MODELO, "weight_dtype": "default"}},
+        "2": {"class_type": "CLIPLoader", "inputs": {"clip_name": "qwen_3_4b.safetensors", "type": "flux2", "device": "default"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": "flux2-vae.safetensors"}},
+        "7": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["2", 0]}},
+        "8": {"class_type": "ConditioningZeroOut", "inputs": {"conditioning": ["7", 0]}},
+        "13": {"class_type": "RandomNoise", "inputs": {"noise_seed": semilla}},
+        "14": {"class_type": "KSamplerSelect", "inputs": {"sampler_name": "euler"}},
+        "17": {"class_type": "SamplerCustomAdvanced", "inputs": {
+            "noise": ["13", 0], "guider": ["12", 0], "sampler": ["14", 0], "sigmas": ["15", 0], "latent_image": ["16", 0]}},
+        "18": {"class_type": "VAEDecode", "inputs": {"samples": ["17", 0], "vae": ["3", 0]}},
+        "19": {"class_type": "SaveImage", "inputs": {"images": ["18", 0], "filename_prefix": "corvid"}},
+    }
+    if imagen_ref:
+        g.update({
+            "4": {"class_type": "LoadImage", "inputs": {"image": imagen_ref}},
+            "5": {"class_type": "ImageScaleToTotalPixels", "inputs": {
+                "image": ["4", 0], "upscale_method": "nearest-exact", "megapixels": 1, "resolution_steps": 1}},
+            "6": {"class_type": "GetImageSize", "inputs": {"image": ["5", 0]}},
+            "9": {"class_type": "VAEEncode", "inputs": {"pixels": ["5", 0], "vae": ["3", 0]}},
+            "10": {"class_type": "ReferenceLatent", "inputs": {"conditioning": ["7", 0], "latent": ["9", 0]}},
+            "11": {"class_type": "ReferenceLatent", "inputs": {"conditioning": ["8", 0], "latent": ["9", 0]}},
+            "12": {"class_type": "CFGGuider", "inputs": {"model": ["1", 0], "positive": ["10", 0], "negative": ["11", 0], "cfg": 1}},
+        })
+        ancho, alto = ["6", 0], ["6", 1]
+    else:
+        g["12"] = {"class_type": "CFGGuider", "inputs": {"model": ["1", 0], "positive": ["7", 0], "negative": ["8", 0], "cfg": 1}}
+        ancho, alto = LADO, LADO
+    g["15"] = {"class_type": "Flux2Scheduler", "inputs": {"steps": 4, "width": ancho, "height": alto}}
+    g["16"] = {"class_type": "EmptyFlux2LatentImage", "inputs": {"width": ancho, "height": alto, "batch_size": 1}}
+    return g
+
+
+def pedir_local(prompt, semilla, referencia=None):
+    """Igual que pedir(), pero con ComfyUI en este PC (sin cuota). ComfyUI tiene que estar abierto."""
+    try:
+        requests.get(f"{COMFY}/system_stats", timeout=5)
+    except requests.RequestException:
+        raise SystemExit(f"ComfyUI no responde en {COMFY}: ábrelo primero (E:\\ComfyUI\\iniciar_corvid.bat)")
+    nombre = None
+    if referencia is not None:
+        r = requests.post(f"{COMFY}/upload/image", files={"image": (Path(referencia).name, Path(referencia).read_bytes(), "image/png")},
+                          data={"overwrite": "true"}, timeout=60)
+        r.raise_for_status()
+        nombre = r.json()["name"]
+    r = requests.post(f"{COMFY}/prompt", json={"prompt": _grafo_comfy(prompt, int(semilla), nombre)}, timeout=60)
+    if r.status_code != 200:
+        raise RuntimeError(f"ComfyUI respondió {r.status_code}: {r.text[:500]}")
+    pid = r.json()["prompt_id"]
+    for _ in range(1200):
+        h = requests.get(f"{COMFY}/history/{pid}", timeout=30).json().get(pid)
+        if h and h.get("status", {}).get("completed"):
+            img = h["outputs"]["19"]["images"][0]
+            datos = requests.get(f"{COMFY}/view", params=img, timeout=60).content
+            return Image.open(BytesIO(datos)).convert("RGB")
+        if h and h.get("status", {}).get("status_str") == "error":
+            raise RuntimeError(f"ComfyUI falló: {str(h['status'].get('messages'))[:500]}")
+        time.sleep(0.5)
+    raise RuntimeError("ComfyUI tardó demasiado")
+
+
 def pedir(prompt, semilla, referencia=None):
+    if os.environ.get("CORVID_MOTOR", MOTOR) == "local":
+        return pedir_local(prompt, semilla, referencia)
     cuenta, token = os.environ.get("CLOUDFLARE_ACCOUNT_ID"), os.environ.get("CLOUDFLARE_API_TOKEN")
     if not cuenta or not token:
         raise SystemExit("Faltan CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN")
