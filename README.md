@@ -100,6 +100,12 @@ Cada accesorio tiene además:
 
 Para crear uno con IA sobre tu personaje: `python tools/cuervo_ia.py accesorio <nombre> "<descripción>" 3`.
 
+### Cuervo gótico (avatar con gestos de alas)
+
+`tools/cuervo_gotico.py` genera, a partir de una base aprobada, 3 posturas de alas, 6 expresiones y accesorios, y
+`componer` deja la carpeta lista para **Importar carpeta** en `ia/cuervo_gotico/png/`. Puede generar con Cloudflare
+o en tu propio PC con ComfyUI y el mismo modelo (FLUX.2 klein 4B), sin cuota: abre ComfyUI y usa `CORVID_MOTOR=local`.
+
 ## Atajos (funcionan aunque estés en el juego)
 
 | Atajo por defecto  | Acción                         |
