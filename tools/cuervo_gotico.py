@@ -211,9 +211,23 @@ def cara_en_gesto(cara, base, gesto):
     return Image.composite(Image.merge("RGB", canales), gesto, m)
 
 
-def extraer_accesorio(base, editada, macizo=True):
+def _rellenar_columnas(m):
+    """Rellena cada columna entre su primer y su último píxel: un sombrero es macizo de arriba abajo.
+    Sin esto, la cinta del sombrero (oscura como la cabeza) no cuenta como cambio y queda un corte."""
+    w, h = m.size
+    px = m.load()
+    out = Image.new("L", m.size, 0)
+    d = ImageDraw.Draw(out)
+    for x in range(w):
+        ys = [y for y in range(h) if px[x, y] > 128]
+        if ys:
+            d.line([(x, ys[0]), (x, ys[-1])], fill=255)
+    return out
+
+
+def extraer_accesorio(base, editada, sombrero=False):
     """Capa RGBA del accesorio: lo que sobresale de la silueta (con su borde blanco) + lo que cambia
-    dentro de la cabeza, en una sola pieza (maciza, sin agujeros; o hueca para gafas: el ojo se ve a través)."""
+    dentro de la cabeza, en una sola pieza maciza (sin agujeros)."""
     editada = _alinear(base, editada, (220, 160, 600, 520))
     fuera = ImageChops.subtract(quitar_verde(editada).getchannel("A").point(lambda v: 255 if v > 128 else 0),
                                 quitar_verde(base).getchannel("A").point(lambda v: 255 if v > 128 else 0))
@@ -224,16 +238,11 @@ def extraer_accesorio(base, editada, macizo=True):
     cambio = ImageChops.multiply(ImageChops.lighter(fuera, dentro), limite)
     m = cambio.filter(ImageFilter.MaxFilter(11)).filter(ImageFilter.MinFilter(11))
     m = _mayor_componente(m)                          # pieza principal, huecos rellenos
-    if not macizo:
-        # gafas: solo la montura dorada (y su contorno), nunca el cristal ni el ojo redibujado debajo
-        h, s, v = editada.convert("HSV").split()
-        oro = ImageChops.multiply(ImageChops.multiply(h.point(lambda x: 255 if 14 <= x <= 45 else 0),
-                                                      s.point(lambda x: 255 if x > 90 else 0)),
-                                  v.point(lambda x: 255 if x > 90 else 0))
-        oro = ImageChops.multiply(oro, cambio)
-        oscuro = ImageChops.multiply(v.point(lambda x: 255 if x < 110 else 0), cambio)
-        m = ImageChops.lighter(oro, ImageChops.multiply(oscuro, oro.filter(ImageFilter.MaxFilter(5))))
-        m = ImageChops.multiply(m, limite)
+    if sombrero:
+        # antes de rellenar columnas, quitar las líneas finas (diferencias en el contorno de la cabeza bajo el
+        # ala); si no, el relleno las convierte en tiras colgando
+        m = _mayor_componente(m.filter(ImageFilter.MinFilter(13)).filter(ImageFilter.MaxFilter(13)))
+        m = _rellenar_columnas(m)
     m = m.filter(ImageFilter.MinFilter(3)).filter(ImageFilter.GaussianBlur(1.2))
     capa = quitar_verde(editada)
     capa.putalpha(ImageChops.multiply(capa.getchannel("A"), m))
@@ -289,7 +298,7 @@ def cmd_componer():
     for ruta in sorted((GEN / "accesorios").glob("*.png")):
         if ruta.stem == "gafas":
             continue
-        capa = extraer_accesorio(base, Image.open(ruta).convert("RGB"))
+        capa = extraer_accesorio(base, Image.open(ruta).convert("RGB"), sombrero=ruta.stem.startswith("sombrero"))
         capa.save(PNG / "accesorios" / ruta.name)
         print("ok accesorio", ruta.stem)
 
