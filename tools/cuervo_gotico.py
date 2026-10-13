@@ -7,6 +7,8 @@ Ediciones con FLUX.2 klein 4B (~105 neurons cada una). Se salta lo que ya existe
   python tools/cuervo_gotico.py caras         -> 6 expresiones: quieto / hablando / parpadeo
   python tools/cuervo_gotico.py accesorios    -> accesorios de cabeza
   python tools/cuervo_gotico.py todo          -> alas + caras + accesorios
+  python tools/cuervo_gotico.py sueltos [n..] -> accesorios dibujados solos (sin cuervo, no hay que recortarlos)
+  python tools/cuervo_gotico.py colocar       -> les quita el fondo y los coloca en la cabeza (sin IA)
   python tools/cuervo_gotico.py componer      -> ia/cuervo_gotico/png/ listo para "Importar carpeta" (sin IA)
   python tools/cuervo_gotico.py hoja [carpeta] -> hoja de contacto
 """
@@ -322,6 +324,104 @@ def dibujar_gafas(lado=1024, ss=4):
     return out.resize((lado, lado), Image.LANCZOS)
 
 
+# ---------- Accesorios sueltos: la IA dibuja solo el objeto (sin cuervo) y se coloca con medidas fijas ----------
+SUELTOS = GEN / "sueltos"
+SEMILLAS_SUELTOS = (8000, 8001, 8002)
+SUELTO = ("Remove the crow completely. The image shows ONLY one single {d}, alone and centered, "
+          "on the same plain flat pastel green background. Drawn in the exact same sticker art style as the reference: "
+          "soft hand-drawn dark purple-grey outline, flat colors with simple soft shading, a thick white sticker border "
+          "around it. No character, no head, no text, nothing else.")
+# nombre -> (descripción, (centro x, borde inferior y, ancho, giro en grados), semilla elegida)
+# Medidas sobre la base de 1024: la cabeza ocupa x 300-700, su parte de arriba está en y 140-290
+# y el sombrero de copa que ya encajaba va en (506, 342, 460).
+ACC_SUELTOS = {
+    "gorro_navidad": ("red christmas santa hat with white fluffy trim and a white pompom, the tip flopping to the right",
+                      (500, 345, 440, 0), 8002),
+    "gorro_fiesta": ("small cone shaped party hat with purple and yellow stripes and a small pompom on the tip",
+                     (520, 250, 230, 12), 8000),
+    "gorro_lana": ("dark purple knitted beanie hat with a folded cuff and a pompom on top",
+                   (505, 340, 460, 0), 8001),
+    "boina": ("black french beret hat, slightly tilted, with a tiny stem on top", (505, 290, 420, -8), 8000),
+    "gorra": ("purple baseball cap seen from the side with the visor pointing to the left", (480, 335, 460, 0), 8001),
+    "cuernos": ("pair of small curved red devil horns, two separate horns side by side with a gap between them",
+                (505, 250, 360, 0), 8002),
+    "aureola": ("golden glowing halo ring seen slightly from above, a flat thin ellipse", (505, 150, 300, 0), 8001),
+    "orejas_gato": ("pair of black cat ears with pink inner ears, two separate pointed ears side by side with a gap "
+                    "between them, no headband", (505, 260, 340, 0), 8000),
+    "corona_flores": ("flower crown seen from the front: a gently curved horizontal band of small pink, purple and white "
+                      "flowers with a few green leaves",
+                      (500, 300, 400, -6), 8001),
+    "auriculares": ("pair of black gaming headphones with purple ear cushions", (600, 530, 500, 0), 8001),
+    "pajarita": ("small purple bow tie", (440, 690, 200, 0), 8001),
+}
+
+
+def cmd_sueltos(nombres=None):
+    for n in nombres or ACC_SUELTOS:
+        for s in SEMILLAS_SUELTOS:
+            destino = SUELTOS / f"{n}_s{s}.png"
+            if not destino.exists():
+                destino.parent.mkdir(parents=True, exist_ok=True)
+                pedir(SUELTO.format(d=ACC_SUELTOS[n][0]), s, BASE).save(destino)
+                print("ok", destino.name)
+
+
+def colocar_suelto(img, caja):
+    """Fondo verde fuera (también el que queda encerrado, p. ej. dentro de un aro), recorte al objeto y colocación.
+    Si no cabe por arriba del lienzo, se encoge manteniendo el borde inferior."""
+    capa = quitar_verde(img, umbral=5)                # umbral bajo: la sombra verdosa bajo la pegatina también fuera
+    fondo = img.convert("RGB").getpixel((8, 8))
+    lejos = Image.new("L", img.size, 0)
+    px, pl = img.convert("RGB").load(), lejos.load()
+    for y in range(img.height):
+        for x in range(img.width):
+            r, g, b = px[x, y]
+            pl[x, y] = 0 if abs(r - fondo[0]) + abs(g - fondo[1]) + abs(b - fondo[2]) < 40 else 255
+    capa.putalpha(ImageChops.multiply(capa.getchannel("A"), lejos.filter(ImageFilter.GaussianBlur(0.8))))
+    solido = capa.getchannel("A").point(lambda v: 255 if v > 128 else 0)       # fuera las motas sueltas
+    capa.putalpha(ImageChops.multiply(capa.getchannel("A"),
+                                      solido.filter(ImageFilter.MinFilter(5)).filter(ImageFilter.MaxFilter(9))))
+
+    def recortar(c):                                  # caja del objeto, sin motas sueltas
+        return c.crop(c.getchannel("A").point(lambda v: 255 if v > 128 else 0).filter(ImageFilter.MinFilter(5)).getbbox())
+
+    capa = recortar(capa)
+    cx, abajo, ancho, giro = caja
+    capa = capa.resize((ancho, round(capa.height * ancho / capa.width)), Image.LANCZOS)
+    if giro:
+        capa = recortar(capa.rotate(giro, Image.BICUBIC, expand=True))
+    if capa.height > abajo - 6:
+        capa = capa.resize((round(capa.width * (abajo - 6) / capa.height), abajo - 6), Image.LANCZOS)
+    out = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+    out.alpha_composite(capa, (cx - capa.width // 2, abajo - capa.height))
+    return out
+
+
+def sin_lado_lejano(capa):
+    """Quita la parte de abajo a la izquierda (p. ej. el auricular del otro lado, que queda tras la cabeza:
+    el cuervo mira a la izquierda en tres cuartos)."""
+    x0, y0, x1, y1 = capa.getbbox()
+    corte = Image.new("L", capa.size, 255)
+    ImageDraw.Draw(corte).rectangle((0, y0 + (y1 - y0) * 0.45, x0 + (x1 - x0) * 0.52, capa.height), fill=0)
+    capa.putalpha(ImageChops.multiply(capa.getchannel("A"), corte))
+    return capa
+
+
+LADO_LEJANO = {"auriculares"}
+
+
+def cmd_colocar():
+    (PNG / "accesorios").mkdir(parents=True, exist_ok=True)
+    for n, (_, caja, s) in ACC_SUELTOS.items():
+        ruta = SUELTOS / f"{n}_s{s}.png"
+        if ruta.exists():
+            capa = colocar_suelto(Image.open(ruta), caja)
+            if n in LADO_LEJANO:
+                capa = sin_lado_lejano(capa)
+            capa.save(PNG / "accesorios" / f"{n}.png")
+            print("ok accesorio", n)
+
+
 def cmd_hoja(carpeta=None, salida=None):
     """Hoja de contacto de una carpeta de gen/ (o del resultado final en png/)."""
     carpeta = Path(carpeta) if carpeta else PNG
@@ -347,8 +447,9 @@ def cmd_hoja(carpeta=None, salida=None):
 
 if __name__ == "__main__":
     a = sys.argv[1:] or ["?"]
-    if a[0] in ("prueba", "alas", "caras", "accesorios", "todo"):
+    if a[0] in ("prueba", "alas", "caras", "accesorios", "todo", "sueltos"):
         cargar_env()
     {"prueba": cmd_prueba, "alas": cmd_alas, "caras": cmd_caras, "accesorios": cmd_accesorios,
      "todo": lambda: (cmd_alas(), cmd_caras(), cmd_accesorios()),
-     "componer": cmd_componer, "hoja": lambda: cmd_hoja(*a[1:3])}.get(a[0], lambda: print(__doc__))()
+     "sueltos": lambda: cmd_sueltos(a[1:]), "colocar": cmd_colocar,
+     "componer": lambda: (cmd_componer(), cmd_colocar()), "hoja": lambda: cmd_hoja(*a[1:3])}.get(a[0], lambda: print(__doc__))()
