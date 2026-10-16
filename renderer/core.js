@@ -64,7 +64,12 @@ const hasFrames = (set) => !!set && Object.values(set).some(Boolean);
 const MAX_GESTOS = 3;
 function gestosOf(ex) {
   if (!Array.isArray(ex.gestos)) ex.gestos = [];
-  for (let i = 0; i < MAX_GESTOS; i++) ex.gestos[i] = { ...emptyFrames(), ...(ex.gestos[i] || {}) };
+  // Se completan en su sitio (no se sustituyen por copias): el bucle llama a esto 60 veces por segundo y
+  // quien guarde una referencia a un gesto (p. ej. al importar, durante un await) debe seguir escribiendo en él.
+  for (let i = 0; i < MAX_GESTOS; i++) {
+    const g = ex.gestos[i] && typeof ex.gestos[i] === 'object' ? ex.gestos[i] : (ex.gestos[i] = {});
+    for (const k of Object.keys(emptyFrames())) if (!(k in g)) g[k] = null;
+  }
   ex.gestos.length = MAX_GESTOS;
   return ex.gestos;
 }

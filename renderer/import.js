@@ -75,10 +75,10 @@ async function importFolder(fileList) {
       }
       const grp = groups.get(dir);
       const save = async (file) => api.saveImage(file.name, new Uint8Array(await file.arrayBuffer()));
-      for (const [slot, file] of Object.entries(grp.frames)) ex.frames[slot] = await save(file);
-      const gestos = gestosOf(ex);
+      for (const [slot, file] of Object.entries(grp.frames)) { const ref = await save(file); ex.frames[slot] = ref; }
       for (const [n, slots] of Object.entries(grp.gestos)) {
-        for (const [slot, file] of Object.entries(slots)) gestos[n - 1][slot] = await save(file);
+        // La referencia se toma después del await: mientras se guarda, el bucle de la app sigue corriendo.
+        for (const [slot, file] of Object.entries(slots)) { const ref = await save(file); gestosOf(ex)[n - 1][slot] = ref; }
       }
       imported.push([ex, mExpr.get(dir)]);
     }

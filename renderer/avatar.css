@@ -38,11 +38,11 @@
 /* Zzz al dormir. --zdir: hacia dónde suben las letras en pantalla; el contenedor se des-refleja con
    --av-flip para que las letras no salgan del revés con el espejo. */
 .av-zzz {
-  position: absolute; left: 60%; top: 8%; width: 26%; height: 30%;
+  position: absolute; left: 55%; top: 12%; width: 26%; height: 30%;
   transform: scaleX(var(--av-flip, 1));
   pointer-events: none; visibility: hidden;
 }
-.av-zzz-izq .av-zzz { left: 14%; }
+.av-zzz-izq .av-zzz { left: 19%; }
 .av-zzz-on .av-zzz { visibility: visible; }
 .av-zzz span {
   position: absolute; left: 30%; bottom: 0; opacity: 0;

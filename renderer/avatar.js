@@ -192,7 +192,7 @@
       switch (A.name) {
         case 'ladeo': { // ladea la cabeza, curioso
           const e = env(0.25, 1.2, 1.6);
-          p.rot = A.dir * 7 * e;
+          p.rot = A.dir * 9 * e;
           p.x = A.dir * 0.012 * H * e;
           p.done = t > 1.6;
           break;
