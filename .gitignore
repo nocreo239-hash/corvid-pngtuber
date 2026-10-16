@@ -5,6 +5,9 @@ dist/
 # Intermedios de la IA (se quedan en local; el avatar final está en ia/png)
 ia/*
 !ia/png/
+!ia/cuervo_gotico/
+ia/cuervo_gotico/*
+!ia/cuervo_gotico/png/
 
 # Python
 __pycache__/

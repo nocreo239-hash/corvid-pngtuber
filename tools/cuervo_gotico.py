@@ -57,6 +57,9 @@ EXPRESIONES = {
     "triste": "sad, a droopy eyebrow line above the yellow ring eye and a small light blue tear under it",
     "sorprendido": "surprised, the yellow ring eye is bigger and wide open, a small yellow exclamation mark near the head",
     "sonrojado": "shy and blushing, the yellow ring eye looks slightly away, a big soft pink blush on the cheek",
+    "dormido": ("asleep and peaceful, the eye is closed and drawn as a relaxed downward-curved yellow line, no eyebrow, "
+                "no blush, a small round light blue sleep bubble floating just in front of the tip of the beak, "
+                "nothing on the cheek"),
 }
 PARPADEO = "the eye is closed and drawn as a simple short yellow line, keep any eyebrow, blush, tear or mark as described"
 
@@ -125,9 +128,9 @@ def cmd_accesorios():
 # ---------- Composición (sin IA, no gasta cuota) ----------
 PNG = DIR / "png"
 CABEZA = [(100, 40, 720, 640)]    # ojo, pico, mejilla y marcas alrededor de la cabeza
-# Ojos de qué expresión usar al parpadear: feliz ya tiene el ojo cerrado (no parpadea);
+# Ojos de qué expresión usar al parpadear: feliz y dormido ya tienen el ojo cerrado (no parpadean);
 # sorprendido tiene el mismo aro que normal y su parpadeo salió raro.
-PARPADEO_DE = {"feliz": None, "sorprendido": "normal"}
+PARPADEO_DE = {"feliz": None, "dormido": None, "sorprendido": "normal"}
 OJO = [(385, 290, 610, 540)]      # ojo y ceja
 PICO = [(180, 360, 450, 580)]
 ZONA_ACC = (40, 0, 1000, 640)
