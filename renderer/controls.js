@@ -36,6 +36,29 @@ function toggleRow({ key, label, hint, onChange }) {
   return row;
 }
 
+// options: [[valor, texto]…] o una función que las devuelve (se rellena al abrir, por si cambian).
+function selectRow({ key, label, options, onChange }) {
+  const row = document.createElement('div');
+  row.className = 'field';
+  row.innerHTML = `<label>${label}</label><select></select>`;
+  const sel = row.querySelector('select');
+  const fill = () => {
+    const list = typeof options === 'function' ? options() : options;
+    sel.innerHTML = '';
+    for (const [v, text] of list) sel.add(new Option(text, v));
+    sel.value = list.some(([v]) => v === S[key]) ? S[key] : list[0][0];
+  };
+  fill();
+  sel.addEventListener('focus', fill);
+  sel.addEventListener('pointerdown', fill);
+  sel.addEventListener('change', () => {
+    S[key] = sel.value;
+    scheduleSave();
+    onChange && onChange(S[key]);
+  });
+  return row;
+}
+
 function section(title, ...children) {
   const card = document.createElement('div');
   card.className = 'card';
@@ -97,6 +120,19 @@ function buildAnimControls() {
       toggleRow({ key: 'sway', label: 'Balancearse suavemente', hint: 'Vaivén lateral y un poco de giro, siempre' }),
       sliderRow({ key: 'swayAmount', label: 'Cuánto', min: 0.2, max: 5, step: 0.1, fmt: (v) => `${v}%` }),
       sliderRow({ key: 'swaySpeed', label: 'Lentitud (un vaivén cada…)', min: 1.5, max: 10, step: 0.5, fmt: (v) => `${v} s` }),
+    ),
+    section('Vida en reposo',
+      toggleRow({ key: 'idleActions', label: 'Gestos cuando estás callado', hint: 'Ladea la cabeza, da saltitos, se sacude o se estira' }),
+      sliderRow({ key: 'idleEvery', label: 'Un gesto cada…', min: 4, max: 60, step: 1, fmt: (v) => `~${v} s`,
+        onChange: () => scheduleIdleAction(performance.now()) }),
+    ),
+    section('Modo dormido',
+      toggleRow({ key: 'sleep', label: 'Dormirse si no hablas', hint: 'Al volver a hablar se despierta con un estirón' }),
+      sliderRow({ key: 'sleepAfter', label: 'Se duerme tras…', min: 0.5, max: 30, step: 0.5, fmt: (v) => `${v} min` }),
+      selectRow({ key: 'sleepExpr', label: 'Expresión al dormir',
+        options: () => [['', 'La actual, con los ojos cerrados'], ...cfg.expressions.map((e) => [e.id, e.name])] }),
+      toggleRow({ key: 'sleepZzz', label: 'Mostrar Zzz' }),
+      selectRow({ key: 'sleepZzzSide', label: 'Zzz a la…', options: [['derecha', 'Derecha'], ['izquierda', 'Izquierda']] }),
     ),
     section('Parpadeo',
       toggleRow({ key: 'blinkEnabled', label: 'Parpadear solo', onChange: () => scheduleBlink(performance.now()) }),

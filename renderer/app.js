@@ -38,11 +38,19 @@ function renderRemote() {
   const prev = sel.value;
   const base = info.port ? `http://127.0.0.1:${info.port}/api` : null;
   const opts = [
-    ...cfg.expressions.map((e) => [`Cambiar a “${e.name}”`, `/expresion/${encodeURIComponent(e.name.replace(/\s+/g, '_'))}`]),
+    ...cfg.expressions.flatMap((e) => {
+      const n = encodeURIComponent(e.name.replace(/\s+/g, '_'));
+      return [[`Cambiar a “${e.name}”`, `/expresion/${n}`], [`“${e.name}” durante 10 s (luego vuelve)`, `/expresion/${n}?segundos=10`]];
+    }),
     ...cfg.accessories.flatMap((a) => {
       const n = encodeURIComponent(a.name.replace(/\s+/g, '_'));
       return [[`Poner / quitar “${a.name}”`, `/accesorio/${n}/alternar`], [`Poner “${a.name}”`, `/accesorio/${n}/poner`], [`Quitar “${a.name}”`, `/accesorio/${n}/quitar`]];
     }),
+    ['Gesto: ladear la cabeza', '/accion/ladeo'],
+    ['Gesto: saltitos', '/accion/saltito'],
+    ['Gesto: sacudirse', '/accion/sacudida'],
+    ['Gesto: estirarse', '/accion/estirarse'],
+    ['Gesto: salto', '/accion/salto'],
     ['Siguiente expresión', '/siguiente'],
     ['Expresión anterior', '/anterior'],
     ['Silenciar / activar micrófono', '/microfono/alternar'],
@@ -52,7 +60,8 @@ function renderRemote() {
   sel.innerHTML = '';
   for (const [label, p] of opts) sel.add(new Option(label, p));
   if (opts.some(([, p]) => p === prev)) sel.value = prev;
-  const url = base && info.apiKey ? `${base}${sel.value}?clave=${info.apiKey}` : 'No disponible (el servidor no arrancó)';
+  const sep = sel.value.includes('?') ? '&' : '?';
+  const url = base && info.apiKey ? `${base}${sel.value}${sep}clave=${info.apiKey}` : 'No disponible (el servidor no arrancó)';
   $('#remoteUrl').textContent = url;
   $('#btnCopyRemote').disabled = !base;
 }
@@ -173,7 +182,9 @@ function wireStaticUi() {
 
   api.onHotkey((h) => {
     if (h.type === 'expression') {
-      setActive(h.id);
+      if (h.seconds > 0) setTemporary(h.id, h.seconds); else setActive(h.id);
+    } else if (h.type === 'action') {
+      playAction(h.name);
     } else if (h.type === 'accessory' || h.type === 'accessorySet') {
       const a = cfg.accessories.find((x) => x.id === h.id);
       if (a) setAccessory(a, h.type === 'accessory' ? !a.on : !!h.value);
@@ -224,6 +235,8 @@ async function init() {
   await applyHotkeys();
   updatePills();
   scheduleBlink(performance.now());
+  lastActivity = performance.now();
+  scheduleIdleAction(performance.now());
   // Guardar ya: el servidor (Streamer.bot) lee las expresiones de config.json, que en una instalación
   // nueva no existe hasta el primer cambio; también deja grabada la migración de versiones antiguas.
   api.saveConfig(cfg).catch(() => toast('No se pudo guardar la configuración', 'error'));

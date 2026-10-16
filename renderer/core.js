@@ -37,6 +37,13 @@ const DEFAULT_SETTINGS = {
   gestures: true,     // alternar entre los gestos de la expresión mientras se habla
   gestureEvery: 2.4,  // segundos (aprox.) que dura cada gesto mientras sigues hablando
   gestureHold: 1.2,   // segundos callado antes de volver al reposo
+  idleActions: true,  // de vez en cuando, callado: ladea la cabeza, da saltitos, se sacude…
+  idleEvery: 14,      // segundos (aprox.) entre gestos de reposo
+  sleep: true,        // dormirse tras un rato sin hablar
+  sleepAfter: 5,      // minutos
+  sleepExpr: '',      // expresión para dormir ('' = la actual con los ojos cerrados)
+  sleepZzz: true,
+  sleepZzzSide: 'derecha',
   captureBg: '#00ff00',
   modifier: 'ctrl-shift', // solo para las teclas por defecto (Ctrl+Shift+1…9)
   muteKey: null,
@@ -95,6 +102,9 @@ let calib = null;
 let lastKey = '';
 let recording = false;
 let editingAccId = ''; // accesorio en modo "Ajustar"
+let lastActivity = 0;  // última vez que hablaste o cambiaste de expresión (para dormirse)
+let sleeping = false;
+let tempExpr = null;   // expresión temporal: { from, id, timer }
 
 const audio = { ctx: null, stream: null, source: null, analyser: null, buf: null, error: null };
 
@@ -134,8 +144,27 @@ function activeExpr() {
 
 function setActive(id) {
   if (!cfg.expressions.some((e) => e.id === id)) return;
+  if (tempExpr) { clearTimeout(tempExpr.timer); tempExpr = null; } // un cambio a mano manda sobre la temporal
+  lastActivity = performance.now(); // cambiar de expresión también lo despierta
   cfg.activeId = id;
   scheduleSave();
   renderQuickbar();
   highlightActiveCard();
+}
+
+// Expresión durante unos segundos y luego vuelve a la de antes (canjes de puntos, Streamer.bot…).
+// Si llegan varias seguidas, se vuelve a la que había antes de la primera.
+function setTemporary(id, seconds) {
+  if (!cfg.expressions.some((e) => e.id === id)) return;
+  const from = tempExpr ? tempExpr.from : cfg.activeId;
+  setActive(id);
+  tempExpr = {
+    from,
+    id,
+    timer: setTimeout(() => {
+      const t = tempExpr;
+      tempExpr = null;
+      if (t && cfg.activeId === t.id) setActive(t.from);
+    }, seconds * 1000),
+  };
 }

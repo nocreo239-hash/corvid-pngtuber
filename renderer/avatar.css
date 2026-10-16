@@ -1,5 +1,6 @@
 /* El contenedor (.av-root) define posición y tamaño; aquí solo se anima su interior. */
 .av-root { overflow: visible; }
+.av-place { container-type: size; }
 .av-place, .av-motion, .av-hop { position: absolute; inset: 0; transform-origin: 50% 100%; }
 .av-back, .av-frames, .av-front, .av-acc-wrap { position: absolute; inset: 0; }
 /* El salto, el aplastamiento y el balanceo (av-hop) y la inercia de los accesorios los mueve avatar.js */
@@ -25,4 +26,36 @@
   50% { transform: translate(calc(var(--shake) * -1), 0); }
   75% { transform: translate(calc(var(--shake) * 0.5), var(--shake)); }
   100% { transform: translate(0, 0); }
+}
+
+/* Dormido: respiración lenta y profunda */
+.av-sleep.av-breathe .av-motion, .av-sleep .av-motion { animation: av-breathe-sleep 4.6s ease-in-out infinite; }
+@keyframes av-breathe-sleep {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(0.985, 1.03); }
+}
+
+/* Zzz al dormir. --zdir: hacia dónde suben las letras en pantalla; el contenedor se des-refleja con
+   --av-flip para que las letras no salgan del revés con el espejo. */
+.av-zzz {
+  position: absolute; left: 60%; top: 8%; width: 26%; height: 30%;
+  transform: scaleX(var(--av-flip, 1));
+  pointer-events: none; visibility: hidden;
+}
+.av-zzz-izq .av-zzz { left: 14%; }
+.av-zzz-on .av-zzz { visibility: visible; }
+.av-zzz span {
+  position: absolute; left: 30%; bottom: 0; opacity: 0;
+  font: 900 8cqh/1 "Segoe UI", system-ui, sans-serif;
+  color: #f4f0ff;
+  -webkit-text-stroke: 1.1cqh #2a2238; paint-order: stroke fill;
+}
+.av-zzz-on .av-zzz span { animation: av-z 2.7s ease-out infinite; }
+.av-zzz span:nth-child(2) { font-size: 10cqh; animation-delay: 0.9s !important; }
+.av-zzz span:nth-child(3) { font-size: 12.5cqh; animation-delay: 1.8s !important; }
+@keyframes av-z {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.6) rotate(0deg); }
+  15% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(var(--zdir, 1) * 9cqh), -18cqh) scale(1.1) rotate(calc(var(--zdir, 1) * 14deg)); }
 }

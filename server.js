@@ -22,12 +22,17 @@ function safeJoin(base, rel) {
   return full;
 }
 
+// Las mismas que ACTIONS en renderer/loop.js
+const ACCIONES = ['ladeo', 'saltito', 'sacudida', 'estirarse', 'salto', 'despertar'];
+
 const normName = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[_-]+/g, ' ').trim().toLowerCase();
 
 // Control remoto (Streamer.bot, Stream Deck…): GET /api/...?clave=XXXX
 //   /api/expresion/<número | nombre | id>   /api/siguiente   /api/anterior
 //   /api/microfono/silenciar | activar | alternar           /api/expresiones (lista)
 //   /api/accesorio/<nombre | número | id>/poner | quitar | alternar
+//   /api/expresion/<…>?segundos=5   (temporal: luego vuelve a la de antes)
+//   /api/accion/ladeo | saltito | sacudida | estirarse | salto | despertar
 // apiKey: clave obligatoria; getExpressions() / getAccessories(): [{ id, name }];
 // onCommand(cmd): reenvía la orden a la ventana.
 function handleApi(req, res, pathname, { apiKey, getExpressions, getAccessories, onCommand }) {
@@ -35,7 +40,8 @@ function handleApi(req, res, pathname, { apiKey, getExpressions, getAccessories,
     res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify(body));
   };
-  const clave = new URL(req.url, 'http://localhost').searchParams.get('clave');
+  const query = new URL(req.url, 'http://localhost').searchParams;
+  const clave = query.get('clave');
   if (!apiKey || clave !== apiKey) return json(403, { ok: false, error: 'Falta la clave o no es correcta' });
 
   // Se parte la dirección sin decodificar y luego cada trozo: así un "/" del nombre (%2F) no la rompe.
@@ -72,8 +78,20 @@ function handleApi(req, res, pathname, { apiKey, getExpressions, getAccessories,
     const n = /^\d+$/.test(q) ? Number(q) : NaN;
     const ex = (n >= 1 && exprs[n - 1]) || exprs.find((e) => e.id === q) || exprs.find((e) => normName(e.name) === normName(q));
     if (!ex) return json(404, { ok: false, error: `No hay ninguna expresión “${q}”`, expresiones: lista() });
-    onCommand({ type: 'expression', id: ex.id });
-    return json(200, { ok: true, expresion: ex.name });
+    let seconds = 0;
+    if (query.has('segundos')) {
+      seconds = Number(String(query.get('segundos')).replace(',', '.'));
+      if (!(seconds > 0 && seconds <= 3600)) return json(400, { ok: false, error: 'segundos debe ser un número entre 0 y 3600' });
+    }
+    onCommand(seconds ? { type: 'expression', id: ex.id, seconds } : { type: 'expression', id: ex.id });
+    return json(200, seconds ? { ok: true, expresion: ex.name, segundos: seconds } : { ok: true, expresion: ex.name });
+  }
+
+  if (parts[0] === 'accion') {
+    const nombre = normName(parts[1] || '');
+    if (!ACCIONES.includes(nombre)) return json(404, { ok: false, error: `Usa /api/accion/${ACCIONES.join(', ')}` });
+    onCommand({ type: 'action', name: nombre });
+    return json(200, { ok: true, accion: nombre });
   }
 
   if (parts[0] === 'siguiente' || parts[0] === 'anterior') {

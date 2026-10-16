@@ -38,7 +38,53 @@ function updateGesture(now, ex) {
   }
 }
 
+// ---------- Vida en reposo y modo dormido ----------
+// Callado, de vez en cuando hace un gesto con el cuerpo (no necesita imágenes): ladea la cabeza, da
+// saltitos, se sacude o se estira. Tras S.sleepAfter minutos sin hablar se duerme; al hablar se despierta.
+// Las acciones viajan en el estado con un número que solo sube: así la vista de OBS las ve una sola vez.
+const IDLE_ACTIONS = ['ladeo', 'saltito', 'sacudida', 'estirarse'];
+const ACTIONS = [...IDLE_ACTIONS, 'salto', 'despertar'];
+let action = null;      // { name, n }
+let actionSeq = 0;
+let nextIdleAction = 0;
+
+function playAction(name) {
+  if (!ACTIONS.includes(name)) return false;
+  action = { name, n: ++actionSeq };
+  return true;
+}
+
+function scheduleIdleAction(now) {
+  nextIdleAction = now + S.idleEvery * 1000 * (0.6 + Math.random() * 0.8);
+}
+
+function updateIdle(now) {
+  if (talking) lastActivity = now;
+  const wasSleeping = sleeping;
+  sleeping = !!S.sleep && !talking && now - lastActivity > S.sleepAfter * 60000;
+  if (wasSleeping && !sleeping) playAction('despertar');
+
+  // Gestos de reposo: solo callado, despierto y no justo después de hablar
+  if (talking || sleeping || !S.idleActions) {
+    if (now > nextIdleAction - 4000) nextIdleAction = now + 4000;
+  } else if (now >= nextIdleAction) {
+    const prev = action && action.name;
+    const opts = IDLE_ACTIONS.filter((a) => a !== prev);
+    playAction(opts[Math.floor(Math.random() * opts.length)]);
+    scheduleIdleAction(now);
+  }
+}
+
+// Dormido: la expresión elegida para dormir o, si no hay, la actual con los ojos cerrados.
+function sleepExpr() {
+  return (S.sleepExpr && cfg.expressions.find((e) => e.id === S.sleepExpr)) || null;
+}
+
 function pickFrame(ex) {
+  if (sleeping) {
+    const f = ex.frames;
+    return (ex.id !== S.sleepExpr && f.blink) || f.idle || f.talk || null;
+  }
   const f = gesture ? ex.gestos[gesture - 1] : ex.frames;
   if (shouting && f.shout) return f.shout;
   if (talking) return (blinking && f.talkBlink) || f.talk || f.idle;
@@ -52,12 +98,14 @@ const ACC_WHEN = [
   ['hablando', 'Solo al hablar'],
   ['gritando', 'Solo al gritar'],
   ['callado', 'Solo callado'],
+  ['dormido', 'Solo dormido'],
 ];
 function accessoryWhen(a) {
   switch (a.when) {
     case 'hablando': return talking;
     case 'gritando': return shouting;
     case 'callado': return !talking;
+    case 'dormido': return sleeping;
     default: return true;
   }
 }
@@ -96,14 +144,18 @@ function tick() {
     blinking = false;
   }
 
-  const ex = activeExpr();
-  updateGesture(now, ex);
+  updateIdle(now);
+  const ex = (sleeping && sleepExpr()) || activeExpr();
+  if (sleeping) gesture = 0; else updateGesture(now, ex);
   const state = {
     src: pickFrame(ex),
     exprId: ex.id,
     gesture,
     talking,
     shouting,
+    sleeping,
+    zzz: sleeping && S.sleepZzz ? S.sleepZzzSide : '',
+    action,
     anim: {
       bounce: S.bounce, bounceHeight: S.bounceHeight, bounceMs: S.bounceMs,
       breathing: S.breathing, shake: S.shake, shakeAmount: S.shakeAmount,
@@ -134,7 +186,7 @@ function updateMeter() {
   $('#markTalk').style.left = `${S.talkThreshold * 100}%`;
   $('#markShout').style.left = `${S.shoutThreshold * 100}%`;
   $('#markShout').style.display = S.shoutEnabled ? '' : 'none';
-  const label = muted ? 'Silenciado' : shouting ? '¡Gritando!' : talking ? 'Hablando' : 'Callado';
+  const label = muted ? 'Silenciado' : shouting ? '¡Gritando!' : talking ? 'Hablando' : sleeping ? 'Dormido' : 'Callado';
   const el = $('#stateLabel');
   if (el.textContent !== label) el.textContent = label;
   el.dataset.state = muted ? 'muted' : shouting ? 'shout' : talking ? 'talk' : 'idle';

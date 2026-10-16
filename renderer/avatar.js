@@ -53,7 +53,8 @@
       // av-place: tamaño y posición · av-motion: respiración (CSS) · av-hop: salto y balanceo (física)
       // Accesorios detrás (av-back) y delante (av-front) del personaje; se mueven con él.
       root.innerHTML = '<div class="av-place"><div class="av-motion"><div class="av-hop">'
-        + '<div class="av-back"></div><div class="av-frames"></div><div class="av-front"></div></div></div></div>';
+        + '<div class="av-back"></div><div class="av-frames"></div><div class="av-front"></div></div></div>'
+        + '<div class="av-zzz"><span>z</span><span>z</span><span>Z</span></div></div>';
       this.place = root.querySelector('.av-place');
       this.hop = root.querySelector('.av-hop');
       this.frames = root.querySelector('.av-frames');
@@ -67,6 +68,10 @@
       this.shown = null;
       this.wasTalking = false;
       this.exprId = null;
+      this.sleeping = false;
+      this.sleepK = 0;        // 0 despierto … 1 dormido (se acerca poco a poco)
+      this.act = null;        // acción en curso: { name, t0, dir, hops: [segundos…], kicked }
+      this.actionN = undefined;
 
       // Física del cuerpo (unidades: px y segundos)
       this.anim = {};
@@ -130,6 +135,13 @@
       this.root.style.setProperty('--shake', `${a.shakeAmount ?? 4}px`);
       this.root.classList.toggle('av-breathe', !!a.breathing);
       this.root.classList.toggle('av-shaking', !!(a.shake && state.shouting));
+      this.root.classList.toggle('av-sleep', !!state.sleeping);
+      // Zzz al dormir: el lado se refleja con el espejo, pero las letras se siguen leyendo bien
+      const flip = state.layout && state.layout.flip ? -1 : 1;
+      this.root.style.setProperty('--av-flip', flip);
+      this.root.style.setProperty('--zdir', (state.zzz === 'izquierda' ? -1 : 1) * flip);
+      this.root.classList.toggle('av-zzz-on', !!state.zzz);
+      this.root.classList.toggle('av-zzz-izq', state.zzz === 'izquierda');
 
       // Tamaño, posición y espejo (capa propia para no pisar las animaciones)
       const L = state.layout || {};
@@ -141,10 +153,70 @@
       if (state.src !== this.current) this.show(state.src || null);
       this.applyAccessories(state.accessories || []);
 
-      const exprChanged = this.exprId !== null && state.exprId !== this.exprId;
+      // Al dormirse o despertarse cambia la expresión, pero eso no es un salto (despertar tiene su acción)
+      const sleepChanged = !!state.sleeping !== this.sleeping;
+      const exprChanged = this.exprId !== null && state.exprId !== this.exprId && !sleepChanged;
       if (a.bounce && ((state.talking && !this.wasTalking) || exprChanged)) this.triggerHop();
       this.wasTalking = !!state.talking;
       this.exprId = state.exprId;
+      this.sleeping = !!state.sleeping;
+
+      // Acciones: se ejecutan cuando llega un número nuevo. La primera vez solo se apunta, para que
+      // OBS no repita la última acción al conectarse (recibe el último estado).
+      const n = state.action ? state.action.n : 0;
+      if (this.actionN !== undefined && n !== this.actionN && state.action) this.startAction(state.action.name);
+      this.actionN = n;
+    }
+
+    startAction(name) {
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      const hops = { saltito: [0, 0.3], salto: [0], despertar: [0.95] }[name] || [];
+      this.act = { name, t0: null, dir, hops: hops.map((t) => ({ t, f: name === 'salto' ? 1 : name === 'despertar' ? 0.6 : 0.35 })), kicked: false };
+    }
+
+    // Salto de altura f (1 = el del rebote al hablar); solo desde el suelo.
+    hopNow(f) {
+      const b = this.body;
+      if (b.y !== 0 || b.vy !== 0) return false;
+      b.vy = -this.hopParams().v0 * Math.sqrt(f);
+      return true;
+    }
+
+    // Cuánto se deforma el cuerpo por la acción en curso (en el instante t, segundos desde que empezó).
+    actionPose(t, H) {
+      const A = this.act;
+      const smooth = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+      // sube en [0, a], se mantiene hasta b, baja hasta c
+      const env = (a, b, c) => (t < a ? smooth(t / a) : t < b ? 1 : smooth(1 - (t - b) / (c - b)));
+      const p = { rot: 0, x: 0, sx: 0, sy: 0, done: false };
+      switch (A.name) {
+        case 'ladeo': { // ladea la cabeza, curioso
+          const e = env(0.25, 1.2, 1.6);
+          p.rot = A.dir * 7 * e;
+          p.x = A.dir * 0.012 * H * e;
+          p.done = t > 1.6;
+          break;
+        }
+        case 'sacudida': { // se sacude las plumas
+          const k = clamp(1 - t / 0.65, 0, 1);
+          p.sx = 0.05 * Math.sin(2 * Math.PI * 13 * t) * k;
+          p.rot = 2.5 * Math.sin(2 * Math.PI * 13 * t + 1) * k;
+          p.done = t > 0.65;
+          break;
+        }
+        case 'estirarse':
+        case 'despertar': { // se estira hacia arriba y se suelta (al despertar, además da un saltito)
+          const e = env(0.45, 0.7, 0.85);
+          p.sy = 0.07 * e;
+          p.sx = -0.04 * e;
+          if (t > 0.85 && !A.kicked) { A.kicked = true; this.body.vs -= 0.9; }
+          p.done = t > 1.2 && !A.hops.length;
+          break;
+        }
+        default:
+          p.done = !A.hops.length;
+      }
+      return p;
     }
 
     // list: [{ src, on, behind, inertia }] de todos los accesorios; se cargan todos y se ven solo los puestos.
@@ -246,10 +318,31 @@
 
       // Estirado en el aire, aplastado al caer (conserva el volumen aproximado)
       const air = b.y < 0 ? clamp(-b.vy / v0, -1, 1) * 0.035 : 0;
-      const sy = 1 + b.s + air;
-      const sx = 1 - (b.s + air) * 0.6;
+      let sy = 1 + b.s + air;
+      let sx = 1 - (b.s + air) * 0.6;
+      let px = b.x;
+      let tilt = b.rot;
+
+      // Acción en curso (gestos de reposo, saltitos, despertar…)
+      if (this.act) {
+        const A = this.act;
+        if (A.t0 === null) A.t0 = now;
+        const ta = (now - A.t0) / 1000;
+        if (A.hops.length && ta >= A.hops[0].t && this.hopNow(A.hops[0].f)) A.hops.shift();
+        const p = this.actionPose(ta, H);
+        tilt += p.rot; px += p.x; sx += p.sx; sy += p.sy;
+        if (p.done || ta > 4) this.act = null;
+      }
+
+      // Dormido: algo encogido e inclinado hacia delante (entra y sale poco a poco)
+      this.sleepK += ((this.sleeping ? 1 : 0) - this.sleepK) * Math.min(1, dt * 1.5);
+      if (this.sleepK > 0.001) {
+        sy -= 0.035 * this.sleepK;
+        sx += 0.01 * this.sleepK;
+        tilt += 2.5 * this.sleepK; // cabecea hacia delante (con el espejo, hacia el otro lado)
+      }
       this.hop.style.transform =
-        `translate(${b.x.toFixed(2)}px, ${b.y.toFixed(2)}px) rotate(${b.rot.toFixed(3)}deg) scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`;
+        `translate(${px.toFixed(2)}px, ${b.y.toFixed(2)}px) rotate(${tilt.toFixed(3)}deg) scale(${sx.toFixed(4)}, ${sy.toFixed(4)})`;
 
       // Aceleración del cuerpo en este paso: lo que "empuja" a los accesorios.
       // En el aire se descuenta la gravedad: cuerpo y accesorio caen juntos y no se separan.

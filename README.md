@@ -88,7 +88,8 @@ Se ponen y quitan con su tecla, con su botón en la barra de expresiones o desde
 (`/api/accesorio/Sombrero_vaquero/alternar`, `/poner` o `/quitar`).
 
 Cada accesorio tiene además:
-- **Se ve**: siempre, solo al hablar, solo al gritar o solo callado (gotas de sudor al gritar, "Zzz" en silencio…).
+- **Se ve**: siempre, solo al hablar, solo al gritar, solo callado o solo dormido (gotas de sudor al gritar,
+  un gorro de dormir…).
 - **Inercia**: cuánto se retrasa y rebota respecto al personaje al saltar o balancearse (0 = pegado).
   Gira desde su base, así que un sombrero se ladea al aterrizar y vuelve a su sitio.
 - **Solo en estas expresiones**: si marcas alguna, el accesorio solo aparece con esas (por ejemplo, el sombrero
@@ -130,6 +131,8 @@ y añade la subacción **Core → Network → Fetch URL** con la dirección copi
 | Dirección (añade `?clave=TU_CLAVE`)     | Qué hace                                  |
 |-----------------------------------------|-------------------------------------------|
 | `/api/expresion/Feliz`                  | Cambia a esa expresión (nombre o número)  |
+| `/api/expresion/Feliz?segundos=10`      | La pone 10 s y vuelve a la de antes (ideal para canjes de puntos) |
+| `/api/accion/saltito`                   | Gesto: `ladeo`, `saltito`, `sacudida`, `estirarse` o `salto` (p. ej. al recibir un follow) |
 | `/api/siguiente` · `/api/anterior`      | Recorre las expresiones                   |
 | `/api/microfono/alternar`               | Silencia o activa el micro                |
 | `/api/microfono/silenciar` · `activar`  | Fija el estado del micro                  |
@@ -138,6 +141,8 @@ y añade la subacción **Core → Network → Fetch URL** con la dirección copi
 
 En el nombre, los espacios se escriben con `_` (`/api/expresion/llorando_risa`); da igual mayúsculas o tildes.
 Si cambias el nombre de una expresión, actualiza su dirección en Streamer.bot.
+Con `segundos`, la clave va detrás con `&`: `/api/expresion/Feliz?segundos=10&clave=TU_CLAVE` (la pestaña OBS ya la copia así).
+Si cambias de expresión a mano mientras dura, se queda la tuya.
 
 La clave se crea sola la primera vez (`api-key.txt` en la carpeta de datos). Sin ella el servidor no obedece,
 así que ninguna web puede cambiar tu personaje. No la enseñes en directo; si se filtra, borra `api-key.txt`
@@ -149,6 +154,11 @@ En **Animación**:
 - **Rebote al hablar**: salta con gravedad real (altura y duración) y se **aplasta al caer**.
 - **Balanceo en reposo**: un vaivén lateral suave con algo de giro, para que nunca esté del todo quieto.
 - **Respiración** y **temblar al gritar**, como antes.
+- **Vida en reposo**: callado, cada pocos segundos hace un gesto con el cuerpo: ladea la cabeza, da dos
+  saltitos, se sacude las plumas o se estira. No necesita imágenes nuevas.
+- **Modo dormido**: tras unos minutos sin hablar (o con el micro silenciado) se duerme: cierra los ojos (usa la
+  imagen de *Parpadeo*, o la expresión que elijas), respira despacio, cabecea y le salen "Zzz". Al hablar o
+  cambiar de expresión se despierta con un estirón y un saltito.
 
 ## Tamaño y posición
 

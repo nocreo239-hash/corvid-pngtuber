@@ -122,6 +122,109 @@ async function runTests(group, assetsDir) {
     g[0].idle = g[0].talk = g[2].idle = g[2].talk = null;
   });
 
+  await test('vida en reposo: gestos solo callado y despierto, sin repetir el anterior', () => {
+    S.idleActions = true; S.idleEvery = 10; S.sleep = false;
+    talking = false; lastActivity = 0; action = null;
+    nextIdleAction = 0; updateIdle(5000);
+    ok(action && IDLE_ACTIONS.includes(action.name), 'callado debía hacer un gesto de reposo');
+    const n = action.n;
+    const prev = action.name;
+    ok(nextIdleAction >= 5000 + 6000 && nextIdleAction <= 5000 + 14000, `el siguiente debía ser en ~10 s (${nextIdleAction - 5000} ms)`);
+    nextIdleAction = 0; updateIdle(6000);
+    ok(action.n === n + 1 && action.name !== prev, 'no debía repetir el mismo gesto seguido');
+    talking = true; nextIdleAction = 0; const m = action.n;
+    updateIdle(7000); eq(action.n, m, 'hablando no hace gestos de reposo');
+    ok(nextIdleAction >= 7000 + 4000, 'tras hablar debía esperar un poco');
+    talking = false; S.idleActions = false; nextIdleAction = 0;
+    updateIdle(20000); eq(action.n, m, 'desactivado: no hace gestos');
+    S.idleActions = true; S.sleep = true; lastActivity = performance.now(); scheduleIdleAction(performance.now());
+  });
+
+  await test('modo dormido: ojos cerrados o la expresión elegida, Zzz, "solo dormido" y despierta', () => {
+    const ex = cfg.expressions[0];
+    S.sleep = true; S.sleepAfter = 1; S.sleepExpr = ''; S.sleepZzz = true; S.sleepZzzSide = 'izquierda';
+    S.idleActions = false; S.gestures = false;
+    talking = false; sleeping = false; lastActivity = 0; action = null;
+    updateIdle(59000); eq(sleeping, false, 'aún no debía dormirse');
+    updateIdle(61000); eq(sleeping, true, 'tras 1 min callado debía dormirse');
+    eq(pickFrame(ex), ex.frames.blink, 'dormido: la expresión actual con los ojos cerrados');
+    const feliz = cfg.expressions[1]; // sin parpadeo: usa su imagen de reposo
+    eq(pickFrame(feliz), feliz.frames.idle);
+    S.sleepExpr = feliz.id;
+    eq(sleepExpr(), feliz);
+    eq(pickFrame(feliz), feliz.frames.idle, 'la expresión de dormir se usa tal cual');
+    S.sleepExpr = 'borrada'; eq(sleepExpr(), null, 'si se borró, vuelve a la actual');
+    S.sleepExpr = '';
+    const a = { on: true, when: 'dormido' };
+    eq(accessoryWhen(a), true);
+    lastActivity = performance.now() - 61000; // tick() usa el reloj real
+    tick();
+    eq(window.__log.pushed.sleeping, true, 'OBS debía saber que duerme');
+    eq(window.__log.pushed.zzz, 'izquierda');
+    eq(window.__log.pushed.src, ex.frames.blink);
+    ok(view.root.classList.contains('av-zzz-on') && view.root.classList.contains('av-zzz-izq'), 'no se ven los Zzz');
+    talking = true; updateIdle(62000);
+    eq(sleeping, false, 'al hablar debía despertarse');
+    eq(action && action.name, 'despertar');
+    eq(accessoryWhen(a), false);
+    talking = false; lastActivity = 62000; updateIdle(62000 + 30000); eq(sleeping, false, 'acaba de hablar');
+    setActive(ex.id); updateIdle(performance.now() + 1000); eq(sleeping, false, 'cambiar de expresión cuenta como actividad');
+    S.sleep = false; lastActivity = 0; updateIdle(1e9); eq(sleeping, false, 'desactivado: no se duerme');
+    S.sleep = true; S.sleepAfter = 5; S.sleepZzzSide = 'derecha'; S.idleActions = true; S.gestures = true;
+    lastActivity = performance.now(); sleeping = false; action = null;
+  });
+
+  await test('expresión temporal: vuelve sola a la de antes; un cambio a mano manda', async () => {
+    const [uno, dos, tres] = cfg.expressions;
+    setActive(uno.id);
+    window.__cb.hotkey({ type: 'expression', id: dos.id, seconds: 0.15 });
+    eq(cfg.activeId, dos.id);
+    window.__cb.hotkey({ type: 'expression', id: tres.id, seconds: 0.15 }); // otra seguida: vuelve a la primera
+    eq(cfg.activeId, tres.id);
+    await wait(260);
+    eq(cfg.activeId, uno.id, 'debía volver a la expresión de antes');
+    window.__cb.hotkey({ type: 'expression', id: dos.id, seconds: 0.15 });
+    setActive(tres.id); // a mano durante la temporal
+    await wait(260);
+    eq(cfg.activeId, tres.id, 'el cambio a mano no debía deshacerse');
+    window.__cb.hotkey({ type: 'expression', id: dos.id }); // sin segundos: normal
+    await wait(50); eq(cfg.activeId, dos.id);
+    setActive(uno.id);
+  });
+
+  await test('acciones: llegan por la API, la vista las ejecuta una vez y vuelve a su forma', () => {
+    const base = JSON.parse(JSON.stringify(window.__log.pushed));
+    window.__cb.hotkey({ type: 'action', name: 'bailar' });
+    window.__cb.hotkey({ type: 'action', name: 'ladeo' });
+    eq(action && action.name, 'ladeo');
+    // Una vista nueva (OBS al conectarse) no repite la última acción
+    const obs = new AvatarView(document.createElement('div'), makeResolver('http'));
+    obs.apply({ ...base, action });
+    eq(obs.act, null, 'OBS no debía repetir la acción al conectarse');
+    view.body = { y: 0, vy: 0, s: 0, vs: 0, x: 0, rot: 0 };
+    view.act = null;
+    view.last = 1000;
+    for (const name of ['ladeo', 'sacudida', 'estirarse', 'saltito', 'despertar']) {
+      playAction(name);
+      view.apply({ ...base, action });
+      ok(view.act && view.act.name === name, `no empezó "${name}"`);
+      let maxRot = 0;
+      let minY = 0;
+      for (let i = 0; i < 300 && view.act; i++) {
+        view.step(view.last + 1000 / 60);
+        const m = /rotate\((-?[\d.]+)deg\)/.exec(view.hop.style.transform);
+        maxRot = Math.max(maxRot, Math.abs(Number(m && m[1])));
+        minY = Math.min(minY, view.body.y);
+      }
+      eq(view.act, null, `"${name}" no terminó`);
+      if (name === 'ladeo') ok(maxRot > 5, `el ladeo no giró (${maxRot}°)`);
+      if (name === 'saltito' || name === 'despertar') ok(minY < -2, `"${name}" no saltó`);
+      for (let i = 0; i < 120; i++) view.step(view.last + 1000 / 60);
+      ok(view.body.y === 0 && Math.abs(view.body.s) < 0.01, `"${name}" no volvió a su forma`);
+    }
+    view.apply({ ...base, action }); eq(view.act, null, 'la misma acción no se repite');
+  });
+
   await test('accesorios: poner/quitar con atajo, "solo al gritar" y "solo en estas expresiones"', async () => {
     addAccessory();
     const a = cfg.accessories[0];
@@ -154,6 +257,10 @@ async function runTests(group, assetsDir) {
     renderRemote();
     const values = [...document.querySelectorAll('#selRemote option')].map((o) => o.value);
     ok(values.includes('/expresion/Normal'), 'falta la expresión');
+    ok(values.includes('/expresion/Normal?segundos=10') && values.includes('/accion/saltito'), 'faltan la temporal o los gestos');
+    $('#selRemote').value = '/expresion/Normal?segundos=10'; renderRemote();
+    ok(/segundos=10&clave=CLAVE$/.test($('#remoteUrl').textContent), 'la clave debía ir con &');
+    $('#selRemote').value = '/expresion/Normal'; renderRemote();
     ok(values.includes('/accesorio/Gafas_3D%2Frojas/alternar'), 'el "/" no va codificado');
     ok(document.querySelector('#remoteUrl').textContent.includes('clave=CLAVE'), 'falta la clave');
   });

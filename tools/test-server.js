@@ -38,6 +38,15 @@ const get = (port, p, headers = {}) => new Promise((resolve, reject) => {
   assert.strictEqual((await get(port, `/api/expresion/${encodeURIComponent('señor_ñu')}?clave=k1`)).status, 200);
   assert.strictEqual((await get(port, '/api/expresion/nada?clave=k1')).status, 404);
   assert.strictEqual((await get(port, '/api/siguiente?clave=k1')).status, 200);
+  const temporal = JSON.parse((await get(port, '/api/expresion/2?segundos=5&clave=k1')).body);
+  assert.strictEqual(temporal.segundos, 5, 'expresión temporal');
+  assert.strictEqual((await get(port, '/api/expresion/2?segundos=2,5&clave=k1')).status, 200, 'segundos con coma');
+  assert.strictEqual((await get(port, '/api/expresion/2?segundos=0&clave=k1')).status, 400);
+  assert.strictEqual((await get(port, '/api/expresion/2?segundos=abc&clave=k1')).status, 400);
+  assert.strictEqual((await get(port, '/api/accion/saltito?clave=k1')).status, 200);
+  assert.strictEqual((await get(port, '/api/accion/Sacudida?clave=k1')).status, 200, 'da igual mayúsculas');
+  assert.strictEqual((await get(port, '/api/accion/bailar?clave=k1')).status, 404);
+  assert.strictEqual((await get(port, '/api/accion?clave=k1')).status, 404);
   assert.strictEqual((await get(port, '/api/microfono/silenciar?clave=k1')).status, 200);
   assert.strictEqual((await get(port, '/api/microfono/bailar?clave=k1')).status, 404);
   assert.strictEqual((await get(port, '/api/accesorio/sombrero_vaquero?clave=k1')).status, 200);
@@ -52,7 +61,10 @@ const get = (port, p, headers = {}) => new Promise((resolve, reject) => {
   commands.splice(-2).forEach((c, i) => assert.deepStrictEqual(c, i ? { type: 'accessory', id: 'g' } : { type: 'accessorySet', id: 'g', value: true }));
   assert.deepStrictEqual(commands, [
     { type: 'expression', id: 'b' }, { type: 'expression', id: 'b' }, { type: 'expression', id: 'c' },
-    { type: 'cycle', dir: 1 }, { type: 'muteSet', value: true },
+    { type: 'cycle', dir: 1 },
+    { type: 'expression', id: 'b', seconds: 5 }, { type: 'expression', id: 'b', seconds: 2.5 },
+    { type: 'action', name: 'saltito' }, { type: 'action', name: 'sacudida' },
+    { type: 'muteSet', value: true },
     { type: 'accessory', id: 'h' }, { type: 'accessorySet', id: 'h', value: true }, { type: 'accessorySet', id: 'h', value: false },
   ]);
 
